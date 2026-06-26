@@ -18,7 +18,8 @@ import {
   ChevronDown,
   Sparkles,
   BookOpen,
-  Star
+  Star,
+  RefreshCw
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -263,6 +264,14 @@ export default function Home() {
     localStorage.setItem('theme', nextTheme);
     document.documentElement.setAttribute('data-theme', nextTheme);
     showToast(`Đã chuyển sang giao diện ${nextTheme === 'dark' ? 'tối' : 'sáng'}`, 'info');
+  };
+
+  // Làm mới trang (clear cache và tải lại dữ liệu)
+  const handleRefresh = async () => {
+    searchCache.current.clear();
+    scannedStoriesRef.current.clear();
+    showToast('Đang làm mới danh sách...', 'info');
+    await fetchStories();
   };
 
   // Gọi API lấy danh sách truyện (có phân trang)
@@ -662,6 +671,10 @@ export default function Home() {
           <span>Quản lý Truyện Đã Đọc</span>
         </h1>
         <div className="controls-group">
+          <button className="btn btn-outline" onClick={handleRefresh} disabled={loading} title="Làm mới trang">
+            <RefreshCw size={16} className={loading ? "spin-animation" : ""} />
+            <span>Làm mới</span>
+          </button>
           <button className="btn btn-primary" onClick={openAddModal}>
             <Plus size={16} />
             <span>Thêm Truyện Mới</span>

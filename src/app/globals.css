@@ -1268,3 +1268,13 @@ next-dev-overlay,
     background-position: -200% 0;
   }
 }
+
+/* Spin animation for refresh icon */
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
