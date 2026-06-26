@@ -803,10 +803,12 @@ body {
     width: 100%;
     justify-content: center;
     gap: 8px;
+    flex-wrap: wrap;
   }
 
   .controls-group .btn {
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 110px;
     justify-content: center;
     font-size: 13px;
     padding: 8px 12px;
@@ -834,6 +836,12 @@ body {
 
   .custom-select-trigger {
     width: 100%;
+  }
+
+  /* Form row vertical stacking on mobile */
+  .form-row-2col {
+    grid-template-columns: 1fr;
+    gap: 12px;
   }
 
   /* Comic Grid stacking */

@@ -19,7 +19,8 @@ import {
   Sparkles,
   BookOpen,
   Star,
-  RefreshCw
+  RefreshCw,
+  Globe
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -52,6 +53,58 @@ const getRelativeTime = (dateStr) => {
   }
 };
 
+// Hàm trích xuất đường dẫn tương đối của truyện (ví dụ: truyen/tuyet-the-quan-lam)
+const getRelativeStoryPath = (url) => {
+  if (!url) return '';
+  let path = url.trim();
+  
+  // Trích xuất path nếu nhập link tuyệt đối có chứa http/https
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    try {
+      const parsed = new URL(path);
+      path = parsed.pathname;
+    } catch (e) {
+      console.error("Error parsing URL:", e);
+    }
+  }
+  
+  // Cắt bỏ phần chương ở cuối (ví dụ: /chuong-62 -> ...)
+  const regex = /\/(chuong|chap|chapter|c|vol|tập|tap|episode|ep)[-_]*(\d+(\.\d+)?)(?:\.[a-zA-Z0-9]+)?(?=\/*$|[?#]|\/)/i;
+  const match = path.match(regex);
+  if (match) {
+    const lastIndex = path.lastIndexOf(match[0]);
+    if (lastIndex !== -1) {
+      path = path.substring(0, lastIndex);
+    }
+  }
+  
+  // Loại bỏ dấu gạch chéo đầu và cuối để chuẩn hóa
+  return path.replace(/^\/|\/$/g, '');
+};
+
+// Hàm trích xuất đường dẫn tương đối của ảnh bìa truyện
+const getRelativeCoverPath = (url) => {
+  if (!url) return '';
+  let path = url.trim();
+  
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    try {
+      const parsed = new URL(path);
+      // Nếu là ảnh từ các host up ảnh ngoài (như imgur, blogspot, google...), giữ nguyên link tuyệt đối
+      const externalHosts = ['imgur.com', 'blogspot.com', 'googleusercontent.com', 'ggpht.com', 'cloudinary.com', 'wp.com'];
+      const isExternal = externalHosts.some(host => parsed.hostname.includes(host));
+      if (!isExternal) {
+        path = parsed.pathname + parsed.search; // Giữ nguyên phần query params (ví dụ: ?code=gtt-yes)
+      }
+    } catch (e) {
+      console.error("Error parsing cover URL:", e);
+    }
+  }
+  
+  // Loại bỏ dấu gạch chéo đầu và cuối nếu là đường dẫn tương đối
+  return path.startsWith('http://') || path.startsWith('https://') ? path : path.replace(/^\/|\/$/g, '');
+};
+
 export default function Home() {
   // State quản lý danh sách truyện và tìm kiếm
   const [stories, setStories] = useState([]);
@@ -70,6 +123,12 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add'); // 'add' hoặc 'edit'
   const [selectedStory, setSelectedStory] = useState(null);
+
+  // State cấu hình domain dùng chung
+  const [comicDomain, setComicDomain] = useState('https://goctruyentranhvui30.com');
+  const [isDomainModalOpen, setIsDomainModalOpen] = useState(false);
+  const [tempDomain, setTempDomain] = useState('');
+  const [saveDomainLoading, setSaveDomainLoading] = useState(false);
 
 
 
@@ -125,19 +184,62 @@ export default function Home() {
       return;
     }
 
-    showToast('Đang quét tự động tổng số chap...', 'info');
+    // Tự động rút gọn và đưa về relative path trong input
+    const relativePath = getRelativeStoryPath(url);
+    if (relativePath && relativePath !== formData.url) {
+      setFormData(prev => ({ ...prev, url: relativePath }));
+    }
+
+    showToast('Đang quét tự động tổng số chap & ảnh bìa...', 'info');
     try {
-      const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(url)}`);
+      const titleParam = formData.title ? `&title=${encodeURIComponent(formData.title)}` : '';
+      const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(url)}${titleParam}`);
       const data = await res.json();
       if (data.success && data.totalChaps) {
-        setFormData(prev => ({ ...prev, totalChaps: data.totalChaps.toString() }));
-        showToast(`Quét thành công! Tìm thấy tổng cộng ${data.totalChaps} chap.`, 'success');
+        setFormData(prev => {
+          const updates = { totalChaps: data.totalChaps.toString() };
+          // Nếu form hiện tại chưa có ảnh bìa, tự động điền ảnh bìa quét được
+          if (data.coverUrl && !prev.coverUrl) {
+            updates.coverUrl = data.coverUrl;
+          }
+          return { ...prev, ...updates };
+        });
+        showToast(`Quét thành công! Tìm thấy ${data.totalChaps} chap và ảnh bìa truyện.`, 'success');
       } else {
-        showToast(data.error || 'Không tìm thấy thông tin số chap trên trang này.', 'warning');
+        showToast(data.error || 'Không tìm thấy thông tin trên trang này.', 'warning');
       }
     } catch (err) {
       console.error(err);
-      showToast('Lỗi quét số chap.', 'danger');
+      showToast('Lỗi quét thông tin truyện.', 'danger');
+    }
+  };
+
+  // Tự động quét và cập nhật riêng ảnh bìa từ link đọc
+  const autoDetectCoverUrl = async () => {
+    const url = formData.url;
+    if (!url) {
+      showToast('Vui lòng điền đường dẫn truyện hoặc dán link đọc để tự động quét ảnh bìa', 'info');
+      return;
+    }
+
+    showToast('Đang quét tự động ảnh bìa...', 'info');
+    try {
+      const titleParam = formData.title ? `&title=${encodeURIComponent(formData.title)}` : '';
+      const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(url)}${titleParam}`);
+      const data = await res.json();
+      if (data.success) {
+        if (data.coverUrl) {
+          setFormData(prev => ({ ...prev, coverUrl: data.coverUrl }));
+          showToast('Quét và cập nhật ảnh bìa thành công!', 'success');
+        } else {
+          showToast('Không tìm thấy ảnh bìa phù hợp trên trang này.', 'warning');
+        }
+      } else {
+        showToast(data.error || 'Lỗi quét thông tin trang.', 'warning');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Lỗi kết nối khi quét ảnh bìa.', 'danger');
     }
   };
 
@@ -153,7 +255,7 @@ export default function Home() {
     }
 
     try {
-      const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(story.url)}`);
+      const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(story.url)}&title=${encodeURIComponent(story.title)}`);
       const data = await res.json();
       if (data.success && data.totalChaps) {
         const scannedTotal = data.totalChaps;
@@ -166,22 +268,38 @@ export default function Home() {
           patchBody.totalChaps = scannedTotal;
         }
 
-        const patchRes = await fetch(`/api/stories/${story._id}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(patchBody)
-        });
+        // Tự động bổ sung ảnh bìa nếu DB chưa có
+        if (data.coverUrl && !story.coverUrl) {
+          patchBody.coverUrl = data.coverUrl;
+        }
         
-        const patchData = await patchRes.json();
-        if (patchData.success) {
-          // Xóa cache vì dữ liệu tổng số chap đã đổi
-          searchCache.current.clear();
-          // Cập nhật state cục bộ để giao diện tiến độ cập nhật ngay lập tức
-          setStories(prev => prev.map(s => s._id === story._id ? { 
-            ...s, 
-            totalChaps: scannedTotal,
-            lastScannedAt: patchBody.lastScannedAt
-          } : s));
+        // Chỉ gửi patch nếu có thay đổi
+        if (patchBody.totalChaps !== undefined || patchBody.coverUrl !== undefined) {
+          const patchRes = await fetch(`/api/stories/${story._id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(patchBody)
+          });
+          
+          const patchData = await patchRes.json();
+          if (patchData.success) {
+            // Xóa cache vì dữ liệu đã đổi
+            searchCache.current.clear();
+            // Cập nhật state cục bộ để giao diện tiến độ cập nhật ngay lập tức
+            setStories(prev => prev.map(s => s._id === story._id ? { 
+              ...s, 
+              totalChaps: scannedTotal,
+              coverUrl: patchBody.coverUrl !== undefined ? patchBody.coverUrl : s.coverUrl,
+              lastScannedAt: patchBody.lastScannedAt
+            } : s));
+          }
+        } else {
+          // Cập nhật thời gian đã quét để không lặp lại quét liên tục
+          await fetch(`/api/stories/${story._id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lastScannedAt: patchBody.lastScannedAt })
+          });
         }
       }
     } catch (err) {
@@ -245,6 +363,56 @@ export default function Home() {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  // Tải cấu hình domain từ database
+  useEffect(() => {
+    const fetchDomain = async () => {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        if (data.success && data.domain) {
+          setComicDomain(data.domain);
+        }
+      } catch (err) {
+        console.error('Lỗi khi nạp cấu hình domain:', err);
+      }
+    };
+    fetchDomain();
+  }, []);
+
+  // Mở modal cấu hình domain
+  const openDomainModal = () => {
+    setTempDomain(comicDomain);
+    setIsDomainModalOpen(true);
+  };
+
+  // Lưu cấu hình domain mới
+  const handleSaveDomain = async (e) => {
+    e.preventDefault();
+    if (!tempDomain.trim()) return;
+
+    setSaveDomainLoading(true);
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ domain: tempDomain.trim() })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setComicDomain(tempDomain.trim());
+        setIsDomainModalOpen(false);
+        showToast('Đã lưu cấu hình domain dùng chung!');
+      } else {
+        showToast(data.error || 'Không thể lưu domain', 'danger');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Lỗi kết nối máy chủ', 'danger');
+    } finally {
+      setSaveDomainLoading(false);
+    }
+  };
 
 
 
@@ -346,11 +514,16 @@ export default function Home() {
       return;
     }
 
+    // Đảm bảo URL được lưu ở dạng đường dẫn tương đối (e.g. truyen/tuyet-the-quan-lam)
+    const cleanUrl = getRelativeStoryPath(formData.url);
+    // Đảm bảo đường dẫn ảnh bìa được làm sạch (lưu tương đối đối với ảnh cùng host)
+    const cleanCoverUrl = getRelativeCoverPath(formData.coverUrl);
+
     // Kiểm tra trùng lặp link trước khi lưu để cảnh báo
-    if (formData.url) {
-      const isDuplicateLink = stories.find(s => s.url && s.url.trim().toLowerCase() === formData.url.trim().toLowerCase() && s._id !== selectedStory?._id);
+    if (cleanUrl) {
+      const isDuplicateLink = stories.find(s => s.url && getRelativeStoryPath(s.url).toLowerCase() === cleanUrl.toLowerCase() && s._id !== selectedStory?._id);
       if (isDuplicateLink) {
-        const confirmed = confirm(`Cảnh báo: Link này đã được sử dụng cho truyện "${isDuplicateLink.title}". Bạn vẫn muốn tiếp tục lưu chứ?`);
+        const confirmed = confirm(`Cảnh báo: Đường dẫn này đã được sử dụng cho truyện "${isDuplicateLink.title}". Bạn vẫn muốn tiếp tục lưu chứ?`);
         if (!confirmed) return;
       }
     }
@@ -379,8 +552,8 @@ export default function Home() {
           body: JSON.stringify({
             title: formData.title,
             chap: formData.chap,
-            url: formData.url,
-            coverUrl: formData.coverUrl,
+            url: cleanUrl, // Sử dụng url tương đối đã chuẩn hóa
+            coverUrl: cleanCoverUrl, // Sử dụng coverUrl đã chuẩn hóa
             rating: formData.rating,
             totalChaps: formData.totalChaps,
             status: 'Reading'
@@ -393,8 +566,8 @@ export default function Home() {
           body: JSON.stringify({
             title: formData.title,
             chap: formData.chap,
-            url: formData.url,
-            coverUrl: formData.coverUrl,
+            url: cleanUrl, // Sử dụng url tương đối đã chuẩn hóa
+            coverUrl: cleanCoverUrl, // Sử dụng coverUrl đã chuẩn hóa
             rating: formData.rating,
             totalChaps: formData.totalChaps
           })
@@ -581,12 +754,29 @@ export default function Home() {
     return url;
   };
 
+  const getComicDomain = () => {
+    return (comicDomain || 'https://goctruyentranhvui30.com').replace(/\/$/, '');
+  };
+
+  // Sinh URL tuyệt đối đầy đủ cho ảnh bìa
+  const getFullCoverUrl = (url) => {
+    if (!url) return '';
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url;
+    }
+    const cleanPath = url.replace(/^\/|\/$/g, '');
+    return `${getComicDomain()}/${cleanPath}`;
+  };
+
   // Sinh URL cho chương hiện tại
   const getCurrentChapUrl = (url, currentChap) => {
     if (!url) return '';
     const num = parseFloat(currentChap);
     const currentChapStr = isNaN(num) ? currentChap : num.toString();
-    return replaceChapInUrl(url, currentChapStr);
+
+    // Rút gọn thành relative path để ghép với domain mới cấu hình
+    const relativePath = getRelativeStoryPath(url);
+    return `${getComicDomain()}/${relativePath}/chuong-${currentChapStr}`;
   };
 
   // Sinh URL cho chương tiếp theo
@@ -594,7 +784,10 @@ export default function Home() {
     if (!url) return '';
     const num = parseFloat(currentChap);
     const nextChap = isNaN(num) ? currentChap : (num + 1).toString();
-    return replaceChapInUrl(url, nextChap);
+
+    // Rút gọn thành relative path để ghép với domain mới cấu hình
+    const relativePath = getRelativeStoryPath(url);
+    return `${getComicDomain()}/${relativePath}/chuong-${nextChap}`;
   };
 
   // Sao chép link chương tiếp theo
@@ -674,6 +867,10 @@ export default function Home() {
           <button className="btn btn-outline" onClick={handleRefresh} disabled={loading} title="Làm mới trang">
             <RefreshCw size={16} className={loading ? "spin-animation" : ""} />
             <span>Làm mới</span>
+          </button>
+          <button className="btn btn-outline" onClick={openDomainModal} title="Cấu hình Domain truyện">
+            <Globe size={16} />
+            <span>Cấu hình Domain</span>
           </button>
           <button className="btn btn-primary" onClick={openAddModal}>
             <Plus size={16} />
@@ -802,10 +999,10 @@ export default function Home() {
                     <div className="card-thumb-wrapper" style={{ position: 'relative', flexShrink: 0 }}>
                       {story.coverUrl ? (
                         <img
-                          src={story.coverUrl}
+                          src={getFullCoverUrl(story.coverUrl)}
                           alt={story.title}
                           className="card-thumb"
-                          onClick={() => window.open(story.coverUrl, '_blank')}
+                          onClick={() => window.open(getFullCoverUrl(story.coverUrl), '_blank')}
                           title="Click để phóng to ảnh bìa"
                         />
                       ) : (
@@ -1140,11 +1337,11 @@ export default function Home() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Link Đọc Chương Hiện Tại (URL)</label>
+                <label className="form-label">Đường Dẫn / Link Truyện</label>
                 <input
-                  type="url"
+                  type="text"
                   className="form-control"
-                  placeholder="Dán link chương bạn đã đọc (ví dụ: https://.../chuong-46)..."
+                  placeholder="Dán link hoặc nhập đường dẫn tương đối (ví dụ: truyen/tuyet-the-quan-lam)..."
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                   onBlur={(e) => {
@@ -1156,14 +1353,25 @@ export default function Home() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Link Ảnh Bìa Truyện (Cover Image URL)</label>
-                <input
-                  type="url"
-                  className="form-control"
-                  placeholder="Dán link ảnh bìa truyện tranh (tùy chọn)..."
-                  value={formData.coverUrl}
-                  onChange={(e) => setFormData({ ...formData, coverUrl: e.target.value })}
-                />
+                <label className="form-label">Đường Dẫn / Link Ảnh Bìa</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Dán link hoặc nhập đường dẫn ảnh bìa tương đối (ví dụ: wp-content/uploads/...)..."
+                    value={formData.coverUrl}
+                    onChange={(e) => setFormData({ ...formData, coverUrl: e.target.value })}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-outline"
+                    onClick={() => autoDetectCoverUrl()}
+                    title="Tự động quét ảnh bìa từ link đọc"
+                    style={{ padding: '0 12px', fontSize: '13px', whiteSpace: 'nowrap' }}
+                  >
+                    Quét
+                  </button>
+                </div>
               </div>
 
               <div className="form-group">
@@ -1218,6 +1426,46 @@ export default function Home() {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   {modalMode === 'add' ? 'Thêm mới' : 'Lưu Thay Đổi'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Cấu hình Domain */}
+      {isDomainModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '450px' }}>
+            <div className="modal-header">
+              <h3 className="modal-title">🌐 Cấu Hình Domain</h3>
+              <button className="btn-icon" onClick={() => setIsDomainModalOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveDomain}>
+              <div className="form-group">
+                <label className="form-label">Domain Truyện Tranh Dùng Chung</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Ví dụ: https://goctruyentranhvui30.com"
+                  value={tempDomain}
+                  onChange={(e) => setTempDomain(e.target.value)}
+                  required
+                />
+                <small style={{ display: 'block', marginTop: '8px', color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.4' }}>
+                  Domain này dùng để tự động tạo link đọc cho các truyện chỉ lưu đường dẫn tương đối (ví dụ: <code>truyen/tuyet-the-quan-lam</code>).
+                </small>
+              </div>
+
+              <div className="form-actions">
+                <button type="button" className="btn btn-outline" onClick={() => setIsDomainModalOpen(false)}>
+                  Hủy
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={saveDomainLoading}>
+                  {saveDomainLoading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
                 </button>
               </div>
             </form>

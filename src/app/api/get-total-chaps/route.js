@@ -1,21 +1,92 @@
 import { NextResponse } from 'next/server';
+import { getDb } from '@/lib/mongodb';
 
-const getMainPageUrl = (url) => {
+// Hàm trích xuất đường dẫn tương đối của truyện (ví dụ: truyen/tuyet-the-quan-lam)
+const getRelativeStoryPath = (url) => {
   if (!url) return '';
-  // Cắt bỏ phần chương ở cuối URL để lấy link trang truyện chính (ví dụ: .../chuong-46 -> ..., .../chuong-240.html -> ...)
-  const regex = /\/(chuong|chap|chapter|c|vol|tập|tap|episode|ep)[-_]*(\d+(\.\d+)?)(?:\.[a-zA-Z0-9]+)?(?=\/*$|[?#]|\/)/i;
-  const match = url.match(regex);
-  if (match) {
-    const lastIndex = url.lastIndexOf(match[0]);
-    if (lastIndex !== -1) {
-      return url.substring(0, lastIndex);
+  let path = url.trim();
+  
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    try {
+      const parsed = new URL(path);
+      path = parsed.pathname;
+    } catch (e) {
+      console.error("Error parsing URL:", e);
     }
   }
-  return url;
+  
+  const regex = /\/(chuong|chap|chapter|c|vol|tập|tap|episode|ep)[-_]*(\d+(\.\d+)?)(?:\.[a-zA-Z0-9]+)?(?=\/*$|[?#]|\/)/i;
+  const match = path.match(regex);
+  if (match) {
+    const lastIndex = path.lastIndexOf(match[0]);
+    if (lastIndex !== -1) {
+      path = path.substring(0, lastIndex);
+    }
+  }
+  
+  return path.replace(/^\/|\/$/g, '');
 };
 
-// Cache lưu tổng số chương của truyện (key: mainPageUrl, value: { totalChaps: number, timestamp: number })
-// Tránh spam quét nhiều lần vào các trang truyện, tăng tốc tải trang
+// Hàm trích xuất đường dẫn tương đối của ảnh bìa truyện
+const getRelativeCoverPath = (url) => {
+  if (!url) return '';
+  let path = url.trim();
+  
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    try {
+      const parsed = new URL(path);
+      const externalHosts = ['imgur.com', 'blogspot.com', 'googleusercontent.com', 'ggpht.com', 'cloudinary.com', 'wp.com'];
+      const isExternal = externalHosts.some(host => parsed.hostname.includes(host));
+      if (!isExternal) {
+        path = parsed.pathname + parsed.search; // Giữ nguyên phần query params (ví dụ: ?code=gtt-yes)
+      }
+    } catch (e) {
+      console.error("Error parsing cover URL:", e);
+    }
+  }
+  
+  return path.startsWith('http://') || path.startsWith('https://') ? path : path.replace(/^\/|\/$/g, '');
+};
+
+// Hàm quét ảnh bìa từ nội dung HTML của trang truyện chính
+const getCoverFromHtml = (html, title) => {
+  // 1. Tìm trong meta tag og:image (phổ biến nhất và chuẩn SEO)
+  const ogImageRegex = /<meta\s+[^>]*property=["']og:image["']\s+[^>]*content=["']([^"']+)["']/i;
+  let match = html.match(ogImageRegex);
+  if (match && match[1]) return match[1];
+  
+  const ogImageRegex2 = /<meta\s+[^>]*content=["']([^"']+)["']\s+[^>]*property=["']og:image["']/i;
+  match = html.match(ogImageRegex2);
+  if (match && match[1]) return match[1];
+
+  // 2. Tìm thẻ img có alt hoặc title chứa tên truyện tranh chính xác
+  if (title) {
+    const escapedTitle = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    
+    // img tag có src đứng trước alt/title
+    const imgRegex = new RegExp(`<img\\s+[^>]*src=["']([^"']+)["'][^>]*?(?:alt|title)=["'][^"']*?${escapedTitle}[^"']*?["']`, 'i');
+    match = html.match(imgRegex);
+    if (match && match[1]) return match[1];
+    
+    // img tag có alt/title đứng trước src
+    const imgRegex2 = new RegExp(`<img\\s+[^>]*?(?:alt|title)=["'][^"']*?${escapedTitle}[^"']*?["'][^>]*src=["']([^"']+)["']`, 'i');
+    match = html.match(imgRegex2);
+    if (match && match[1]) return match[1];
+  }
+
+  // 3. Tìm thẻ img có class chứa các từ khóa ảnh bìa/ảnh đại diện làm dự phòng
+  const coverRegex = /<img\s+[^>]*class=["'][^"']*(?:cover|image|thumb|avatar)[^"']*["'][^>]*src=["']([^"']+)["']/i;
+  match = html.match(coverRegex);
+  if (match && match[1]) return match[1];
+
+  const coverRegex2 = /<img\s+[^>]*src=["']([^"']+)["'][^>]*class=["'][^"']*(?:cover|image|thumb|avatar)[^"']*["']/i;
+  match = html.match(coverRegex2);
+  if (match && match[1]) return match[1];
+
+  return null;
+};
+
+// Cache lưu tổng số chương & ảnh bìa của truyện (key: resolvedUrl, value: { totalChaps, coverUrl, timestamp })
 const scrapeCache = new Map();
 const CACHE_TTL = 30 * 60 * 1000; // 30 phút cache
 
@@ -23,23 +94,35 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const url = searchParams.get('url');
+    const title = searchParams.get('title') || '';
+    
     if (!url) {
       return NextResponse.json({ success: false, error: 'URL is required' }, { status: 400 });
     }
 
-    const mainPageUrl = getMainPageUrl(url);
-    if (!mainPageUrl) {
-      return NextResponse.json({ success: false, error: 'Invalid URL' }, { status: 400 });
+    // Lấy domain cấu hình từ database
+    const db = await getDb();
+    const setting = await db.collection('settings').findOne({ key: 'comic_domain' });
+    const domain = setting ? setting.value : (process.env.NEXT_PUBLIC_COMIC_DOMAIN || 'https://goctruyentranhvui30.com');
+    const cleanDomain = domain.replace(/\/$/, '');
+
+    // Phân giải đường dẫn tương đối
+    const relativePath = getRelativeStoryPath(url);
+    if (!relativePath) {
+      return NextResponse.json({ success: false, error: 'Invalid URL/Path' }, { status: 400 });
     }
+
+    const resolvedUrl = `${cleanDomain}/${relativePath}`;
 
     // Kiểm tra cache trước
     const now = Date.now();
-    const cached = scrapeCache.get(mainPageUrl);
+    const cached = scrapeCache.get(resolvedUrl);
     if (cached && (now - cached.timestamp < CACHE_TTL)) {
       return NextResponse.json({
         success: true,
         totalChaps: cached.totalChaps,
-        mainPageUrl,
+        coverUrl: cached.coverUrl,
+        mainPageUrl: resolvedUrl,
         fromCache: true
       });
     }
@@ -47,7 +130,7 @@ export async function GET(request) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 giây timeout
 
-    const response = await fetch(mainPageUrl, {
+    const response = await fetch(resolvedUrl, {
       method: 'GET',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -65,20 +148,13 @@ export async function GET(request) {
 
     const html = await response.text();
 
-    // Lấy phần đường dẫn của trang chính (ví dụ: /truyen/menh-luan-chi-chu...)
-    let urlPath = '';
-    try {
-      urlPath = new URL(mainPageUrl).pathname.replace(/\/$/, '');
-    } catch (e) {
-      const match = mainPageUrl.match(/https?:\/\/[^\/]+(\/[^?#]+)/);
-      urlPath = match ? match[1].replace(/\/$/, '') : '';
-    }
-
+    // 1. Quét tìm tổng số chương
+    let urlPath = `/${relativePath}`;
     const chaps = [];
     let match;
 
     if (urlPath && urlPath.length > 5) {
-      // 1. Quét chính xác: Chỉ tìm các liên kết chứa đường dẫn của truyện này kèm từ khóa chương
+      // Quét chính xác theo đường dẫn của truyện tranh
       const escapedPath = urlPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const storyRegex = new RegExp(`${escapedPath}[^"'>]*?(?:chuong|chap|chapter|c|vol|tập|tap|episode|ep)[-_]*(\\d+(\\.\\d+)?)`, 'gi');
       
@@ -90,7 +166,7 @@ export async function GET(request) {
       }
     }
 
-    // 2. Quét dự phòng (Fallback): Nếu không quét được theo đường dẫn riêng, quét toàn bộ từ khóa chương trong trang
+    // Quét dự phòng (Fallback 1)
     if (chaps.length === 0) {
       const genericRegex = /(?:chuong|chap|chapter|c|vol|tập|tap|episode|ep)[-_]*(\d+(\.\d+)?)/gi;
       while ((match = genericRegex.exec(html)) !== null) {
@@ -101,7 +177,7 @@ export async function GET(request) {
       }
     }
 
-    // 3. Quét dự phòng cuối cùng: Chỉ tìm số đứng sau dấu gạch chéo cuối
+    // Quét dự phòng cuối cùng (Fallback 2)
     if (chaps.length === 0) {
       const fallbackRegex = /\/(\d+(\.\d+)?)(?=\/*$|[?#])/g;
       while ((match = fallbackRegex.exec(html)) !== null) {
@@ -116,19 +192,25 @@ export async function GET(request) {
       return NextResponse.json({ success: false, error: 'Không tìm thấy chương nào trong HTML' });
     }
 
-    // Lấy số chương lớn nhất làm tổng số chương
     const maxChap = Math.max(...chaps);
 
+    // 2. Quét tìm ảnh bìa truyện từ HTML
+    let coverUrl = getCoverFromHtml(html, title);
+    if (coverUrl) {
+      coverUrl = getRelativeCoverPath(coverUrl);
+    }
+
     // Lưu kết quả vào cache
-    scrapeCache.set(mainPageUrl, { totalChaps: maxChap, timestamp: Date.now() });
+    scrapeCache.set(resolvedUrl, { totalChaps: maxChap, coverUrl, timestamp: Date.now() });
 
     return NextResponse.json({
       success: true,
       totalChaps: maxChap,
-      mainPageUrl
+      coverUrl,
+      mainPageUrl: resolvedUrl
     });
   } catch (error) {
-    console.error('Error fetching total chapters:', error.message);
+    console.error('Error fetching total chapters & cover:', error.message);
     return NextResponse.json({ success: false, error: error.message });
   }
 }
