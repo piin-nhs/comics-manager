@@ -100,6 +100,9 @@ export default function Home() {
   // Ref lưu các truyện đã quét ngầm trong phiên làm việc để tránh quét lại nhiều lần trong cùng 1 view
   const scannedStoriesRef = useRef(new Set());
 
+  // Ref lưu cache tìm kiếm/phân trang trên client để tải tức thì (0ms)
+  const searchCache = useRef(new Map());
+
   // Danh sách các lựa chọn sắp xếp
   const sortOptions = [
     { value: 'updatedAt_desc', label: 'Mới cập nhật' },
@@ -170,6 +173,8 @@ export default function Home() {
         
         const patchData = await patchRes.json();
         if (patchData.success) {
+          // Xóa cache vì dữ liệu tổng số chap đã đổi
+          searchCache.current.clear();
           // Cập nhật state cục bộ để giao diện tiến độ cập nhật ngay lập tức
           setStories(prev => prev.map(s => s._id === story._id ? { 
             ...s, 
@@ -262,6 +267,17 @@ export default function Home() {
 
   // Gọi API lấy danh sách truyện (có phân trang)
   const fetchStories = async () => {
+    const cacheKey = `${page}_${debouncedSearchQuery}_${sortBy}`;
+    
+    // Kiểm tra cache trên client trước để phản hồi tức thì
+    if (searchCache.current.has(cacheKey)) {
+      const cached = searchCache.current.get(cacheKey);
+      setStories(cached.data);
+      setTotalPages(cached.totalPages);
+      setTotalStories(cached.total);
+      return;
+    }
+
     setLoading(true);
     try {
       const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}`);
@@ -269,8 +285,17 @@ export default function Home() {
       if (data.success) {
         setStories(data.data);
         if (data.pagination) {
-          setTotalPages(data.pagination.totalPages || 1);
-          setTotalStories(data.pagination.total || 0);
+          const totalPagesVal = data.pagination.totalPages || 1;
+          const totalStoriesVal = data.pagination.total || 0;
+          setTotalPages(totalPagesVal);
+          setTotalStories(totalStoriesVal);
+          
+          // Lưu dữ liệu vào cache client
+          searchCache.current.set(cacheKey, {
+            data: data.data,
+            totalPages: totalPagesVal,
+            total: totalStoriesVal
+          });
         }
       } else {
         showToast(data.error || 'Không thể tải dữ liệu', 'danger');
@@ -351,6 +376,7 @@ export default function Home() {
         showToast(data.message || 'Lưu thông tin thành công!');
         setIsModalOpen(false);
         resetForm();
+        searchCache.current.clear(); // Xóa cache tìm kiếm client
         fetchStories();
       } else {
         showToast(data.error || 'Có lỗi xảy ra', 'danger');
@@ -373,6 +399,7 @@ export default function Home() {
       const data = await res.json();
       if (data.success) {
         showToast(`Đã xóa truyện "${story.title}"`);
+        searchCache.current.clear(); // Xóa cache tìm kiếm client
         fetchStories();
       } else {
         showToast(data.error || 'Không thể xóa', 'danger');
@@ -383,7 +410,7 @@ export default function Home() {
     }
   };
 
-  // Tăng/Giảm nhanh 1 Chap
+  // Tăng/Giảm nhanh 1 Chap (Sử dụng Optimistic Updates để triệt tiêu 100% độ trễ)
   const handleQuickChapStep = async (story, delta) => {
     const num = parseFloat(story.chap);
     if (isNaN(num)) {
@@ -394,21 +421,44 @@ export default function Home() {
     let nextChapVal = Math.round((num + delta) * 100) / 100;
 
     // Giới hạn dưới: không được bằng 0 và không được âm (clamp ở 1)
-    if (nextChapVal < 1) {
-      nextChapVal = 1;
-    }
+    if (nextChapVal < 1) nextChapVal = 1;
 
     // Giới hạn trên: không được lớn hơn số chap tổng (nếu có số chap tổng hợp lệ)
     const total = parseFloat(story.totalChaps) || 0;
-    if (total > 0 && nextChapVal > total) {
-      nextChapVal = total;
-    }
+    if (total > 0 && nextChapVal > total) nextChapVal = total;
 
     const newChap = nextChapVal.toString();
-    if (newChap === story.chap) {
-      return; // Đã đạt giới hạn, không cần lưu lại
+    if (newChap === story.chap) return; // Đã đạt giới hạn, không cần lưu lại
+
+    const originalChap = story.chap;
+    
+    // Cập nhật Optimistic - đổi số chap trên giao diện lập tức (0ms delay)
+    setStories(prev => prev.map(s => s._id === story._id ? { ...s, chap: newChap } : s));
+    searchCache.current.clear(); // Xóa cache tìm kiếm client vì dữ liệu đã thay đổi
+
+    try {
+      const res = await fetch(`/api/stories/${story._id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chap: newChap })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast(`Đã cập nhật "${story.title}" lên chap ${newChap}`);
+        // Pháo hoa nhẹ
+        confetti({ particleCount: 30, angle: 60, spread: 55, origin: { x: 0 } });
+        confetti({ particleCount: 30, angle: 120, spread: 55, origin: { x: 1 } });
+      } else {
+        // Rollback nếu có lỗi từ server
+        setStories(prev => prev.map(s => s._id === story._id ? { ...s, chap: originalChap } : s));
+        showToast(data.error || 'Lỗi cập nhật số chap', 'danger');
+      }
+    } catch (err) {
+      console.error(err);
+      // Rollback nếu mất mạng
+      setStories(prev => prev.map(s => s._id === story._id ? { ...s, chap: originalChap } : s));
+      showToast('Lỗi kết nối máy chủ', 'danger');
     }
-    await updateChapInDb(story._id, newChap, story.title);
   };
 
   // Kích hoạt chỉnh sửa trực tiếp số chap
@@ -417,15 +467,13 @@ export default function Home() {
     setTempChapVal(story.chap);
   };
 
-  // Lưu số chap chỉnh sửa trực tiếp
+  // Lưu số chap chỉnh sửa trực tiếp (Sử dụng Optimistic Updates phản hồi tức thì)
   const saveInlineChap = async (story) => {
     if (editingChapId !== story._id) return;
     setEditingChapId(null);
 
     let val = tempChapVal.trim();
-    if (!val) {
-      val = story.chap;
-    }
+    if (!val) val = story.chap;
 
     const numVal = parseFloat(val);
     if (!isNaN(numVal)) {
@@ -443,30 +491,33 @@ export default function Home() {
 
     if (val === story.chap) return;
 
-    await updateChapInDb(story._id, val, story.title);
-  };
+    const originalChap = story.chap;
+    
+    // Cập nhật Optimistic
+    setStories(prev => prev.map(s => s._id === story._id ? { ...s, chap: val } : s));
+    searchCache.current.clear(); // Xóa cache tìm kiếm client
 
-  // Đẩy cập nhật chap lên MongoDB
-  const updateChapInDb = async (id, chapVal, title) => {
     try {
-      const res = await fetch(`/api/stories/${id}`, {
+      const res = await fetch(`/api/stories/${story._id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chap: chapVal })
+        body: JSON.stringify({ chap: val })
       });
       const data = await res.json();
       if (data.success) {
-        setStories(prev => prev.map(s => s._id === id ? { ...s, chap: chapVal } : s));
-        showToast(`Đã cập nhật "${title}" lên chap ${chapVal}`);
-
+        showToast(`Đã cập nhật "${story.title}" lên chap ${val}`);
         // Pháo hoa nhẹ
         confetti({ particleCount: 30, angle: 60, spread: 55, origin: { x: 0 } });
         confetti({ particleCount: 30, angle: 120, spread: 55, origin: { x: 1 } });
       } else {
+        // Rollback
+        setStories(prev => prev.map(s => s._id === story._id ? { ...s, chap: originalChap } : s));
         showToast(data.error || 'Lỗi cập nhật số chap', 'danger');
       }
     } catch (err) {
       console.error(err);
+      // Rollback
+      setStories(prev => prev.map(s => s._id === story._id ? { ...s, chap: originalChap } : s));
       showToast('Lỗi kết nối máy chủ', 'danger');
     }
   };
