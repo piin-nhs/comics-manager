@@ -98,6 +98,9 @@ export default function Home() {
   // State theo dõi copy link thành công
   const [copiedId, setCopiedId] = useState(null);
 
+  // Ref lưu các truyện đã quét ngầm trong phiên làm việc để tránh quét lại nhiều lần trong cùng 1 view
+  const scannedStoriesRef = useRef(new Set());
+
   // Danh sách các lựa chọn sắp xếp
   const sortOptions = [
     { value: 'updatedAt_desc', label: 'Mới cập nhật' },
@@ -135,26 +138,45 @@ export default function Home() {
     }
   };
 
-  // Quét tổng số chap trong nền cho từng truyện
+  // Quét tổng số chap trong nền cho từng truyện (chỉ chạy tối đa 1 lần mỗi 2 giờ để tránh lag và tốn tài nguyên)
   const scanTotalChapsInBackground = async (story) => {
     if (!story.url) return;
+
+    // Nếu mới quét trong vòng 2 giờ qua, bỏ qua không quét lại nữa
+    const lastScanned = story.lastScannedAt ? new Date(story.lastScannedAt).getTime() : 0;
+    const now = Date.now();
+    if (now - lastScanned < 2 * 60 * 60 * 1000) {
+      return;
+    }
+
     try {
       const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(story.url)}`);
       const data = await res.json();
       if (data.success && data.totalChaps) {
         const scannedTotal = data.totalChaps;
-        // Nếu số chap quét được khác với số chap đang lưu trong DB, tự động cập nhật
+        
+        // Tạo body PATCH
+        const patchBody = {
+          lastScannedAt: new Date().toISOString()
+        };
         if (scannedTotal !== story.totalChaps) {
-          const patchRes = await fetch(`/api/stories/${story._id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ totalChaps: scannedTotal })
-          });
-          const patchData = await patchRes.json();
-          if (patchData.success) {
-            // Cập nhật state cục bộ để giao diện tiến độ cập nhật ngay
-            setStories(prev => prev.map(s => s._id === story._id ? { ...s, totalChaps: scannedTotal } : s));
-          }
+          patchBody.totalChaps = scannedTotal;
+        }
+
+        const patchRes = await fetch(`/api/stories/${story._id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(patchBody)
+        });
+        
+        const patchData = await patchRes.json();
+        if (patchData.success) {
+          // Cập nhật state cục bộ để giao diện tiến độ cập nhật ngay lập tức
+          setStories(prev => prev.map(s => s._id === story._id ? { 
+            ...s, 
+            totalChaps: scannedTotal,
+            lastScannedAt: patchBody.lastScannedAt
+          } : s));
         }
       }
     } catch (err) {
@@ -169,10 +191,10 @@ export default function Home() {
     stories.forEach((story, index) => {
       if (!story.url) return;
 
-      const cacheKey = `scan_bg_${story._id}`;
-      // Chỉ quét 1 lần duy nhất trên client cho mỗi câu chuyện trong phiên làm việc để tránh spam
-      if (window[cacheKey]) return;
-      window[cacheKey] = true;
+      const cacheKey = `${story._id}_${story.url}`;
+      // Chỉ quét 1 lần duy nhất trên client cho mỗi cặp ID + URL để tránh spam
+      if (scannedStoriesRef.current.has(cacheKey)) return;
+      scannedStoriesRef.current.add(cacheKey);
 
       // Chia nhỏ thời gian quét để tránh nghẽn luồng và quá tải server
       setTimeout(() => {

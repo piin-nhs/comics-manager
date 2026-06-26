@@ -46,8 +46,7 @@ export async function POST(request) {
     const db = await getDb();
     const collection = db.collection('stories');
     
-    let successCount = 0;
-    let updateCount = 0;
+    const bulkOps = [];
     
     // Duyệt qua từng hàng dữ liệu (bắt đầu từ dòng 1)
     for (let i = 1; i < rawData.length; i++) {
@@ -59,38 +58,36 @@ export async function POST(request) {
       
       if (!title) continue;
       
-      // Upsert: Kiểm tra sự tồn tại của truyện theo tên (không phân biệt chữ hoa/thường)
-      const existing = await collection.findOne({
-        title: { $regex: `^${escapeRegExp(title)}$`, $options: 'i' }
-      });
-      
-      if (existing) {
-        // Cập nhật chap mới nếu truyện đã tồn tại
-        await collection.updateOne(
-          { _id: existing._id },
-          { 
+      bulkOps.push({
+        updateOne: {
+          filter: { title: { $regex: `^${escapeRegExp(title)}$`, $options: 'i' } },
+          update: {
             $set: { 
-              chap: chap,
-              updatedAt: new Date()
-            } 
-          }
-        );
-        updateCount++;
-      } else {
-        // Thêm truyện mới
-        await collection.insertOne({
-          title: title,
-          chap: chap,
-          status: 'Reading', // Mặc định là Đang đọc
-          url: '',
-          coverUrl: '',
-          rating: 0,
-          notes: '',
-          createdAt: new Date(),
-          updatedAt: new Date()
-        });
-        successCount++;
-      }
+              chap: chap, 
+              updatedAt: new Date() 
+            },
+            $setOnInsert: {
+              title: title, // Lưu đúng tên gốc viết hoa/thường nếu thêm mới
+              status: 'Reading',
+              url: '',
+              coverUrl: '',
+              rating: 0,
+              notes: '',
+              createdAt: new Date()
+            }
+          },
+          upsert: true
+        }
+      });
+    }
+    
+    let successCount = 0;
+    let updateCount = 0;
+    
+    if (bulkOps.length > 0) {
+      const result = await collection.bulkWrite(bulkOps);
+      successCount = result.upsertedCount || 0;
+      updateCount = result.matchedCount || 0;
     }
     
     return NextResponse.json({ 

@@ -28,6 +28,7 @@ export async function PATCH(request, { params }) {
     if (body.rating !== undefined) updateData.rating = Number(body.rating);
     if (body.notes !== undefined) updateData.notes = body.notes.trim();
     if (body.totalChaps !== undefined) updateData.totalChaps = Number(body.totalChaps) || 0;
+    if (body.lastScannedAt !== undefined) updateData.lastScannedAt = new Date(body.lastScannedAt);
     
     const result = await db.collection('stories').updateOne(
       { _id: new ObjectId(id) },
