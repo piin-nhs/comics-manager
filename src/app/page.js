@@ -442,11 +442,9 @@ export default function Home() {
     }
   };
 
-  // Sinh URL cho chương tiếp theo
-  const getNextChapUrl = (url, currentChap) => {
+  // Helper thay thế số chương trong URL
+  const replaceChapInUrl = (url, chapStr) => {
     if (!url) return '';
-    const num = parseFloat(currentChap);
-    const nextChap = isNaN(num) ? currentChap : (num + 1).toString();
     
     const regex = /(chuong|chap|chapter|c|vol|tập|tap|episode|ep|[-_]+)(\d+(\.\d+)?)(?=\/*$|[?#])/i;
     const match = url.match(regex);
@@ -456,7 +454,7 @@ export default function Home() {
       
       const lastIndex = url.lastIndexOf(fullMatch);
       if (lastIndex !== -1) {
-        return url.substring(0, lastIndex) + prefix + nextChap + url.substring(lastIndex + fullMatch.length);
+        return url.substring(0, lastIndex) + prefix + chapStr + url.substring(lastIndex + fullMatch.length);
       }
     }
     
@@ -466,11 +464,27 @@ export default function Home() {
       const numberStr = endNumMatch[1];
       const lastIndex = url.lastIndexOf('/' + numberStr);
       if (lastIndex !== -1) {
-        return url.substring(0, lastIndex) + '/' + nextChap + url.substring(lastIndex + 1 + numberStr.length);
+        return url.substring(0, lastIndex) + '/' + chapStr + url.substring(lastIndex + 1 + numberStr.length);
       }
     }
     
     return url;
+  };
+
+  // Sinh URL cho chương hiện tại
+  const getCurrentChapUrl = (url, currentChap) => {
+    if (!url) return '';
+    const num = parseFloat(currentChap);
+    const currentChapStr = isNaN(num) ? currentChap : num.toString();
+    return replaceChapInUrl(url, currentChapStr);
+  };
+
+  // Sinh URL cho chương tiếp theo
+  const getNextChapUrl = (url, currentChap) => {
+    if (!url) return '';
+    const num = parseFloat(currentChap);
+    const nextChap = isNaN(num) ? currentChap : (num + 1).toString();
+    return replaceChapInUrl(url, nextChap);
   };
 
   // Sao chép link chương tiếp theo
@@ -640,6 +654,7 @@ export default function Home() {
         <>
           <div className="comics-grid">
             {stories.map((story) => {
+              const currentUrl = getCurrentChapUrl(story.url, story.chap);
               const nextUrl = getNextChapUrl(story.url, story.chap);
               const nextChapNum = (parseFloat(story.chap) + 1) || '';
               const currentChapNum = parseFloat(story.chap) || 0;
@@ -722,7 +737,7 @@ export default function Home() {
                   <div className="card-chap-row">
                     {story.url ? (
                       <a 
-                        href={story.url} 
+                        href={currentUrl} 
                         target="comic_reader" 
                         rel="noopener noreferrer" 
                         className="current-link" 
