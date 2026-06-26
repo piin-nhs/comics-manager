@@ -63,7 +63,6 @@ export default function Home() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalStories, setTotalStories] = useState(0);
-  const [totalChapsRead, setTotalChapsRead] = useState(0);
   const limit = 6; // Giới hạn 6 truyện mỗi trang để tăng hiệu năng và tránh bị lag
 
   // State quản lý giao diện Modal
@@ -272,7 +271,6 @@ export default function Home() {
         if (data.pagination) {
           setTotalPages(data.pagination.totalPages || 1);
           setTotalStories(data.pagination.total || 0);
-          setTotalChapsRead(data.pagination.totalChapsRead || 0);
         }
       } else {
         showToast(data.error || 'Không thể tải dữ liệu', 'danger');
@@ -611,15 +609,6 @@ export default function Home() {
           <div className="stat-info">
             <span className="stat-label">Tổng số bộ truyện</span>
             <span className="stat-val">{totalStories}</span>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon-wrapper success">
-            <Sparkles size={20} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-label">Tổng số chương đã đọc</span>
-            <span className="stat-val">{totalChapsRead}</span>
           </div>
         </div>
       </section>

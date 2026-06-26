@@ -33,13 +33,7 @@ export async function GET(request) {
       sortQuery = { updatedAt: -1 };
     }
     
-    // Tính tổng số chương đã đọc một cách tối ưu (chỉ fetch trường 'chap' để giảm tải RAM)
-    const allChaps = await db.collection('stories').find(query, { projection: { chap: 1 } }).toArray();
-    const totalChapsRead = allChaps.reduce((sum, s) => {
-      const val = parseFloat(s.chap);
-      return sum + (isNaN(val) ? 0 : val);
-    }, 0);
-    const totalCount = allChaps.length;
+    const totalCount = await db.collection('stories').countDocuments(query);
     const totalPages = Math.ceil(totalCount / limit);
     const startIndex = (page - 1) * limit;
 
@@ -71,8 +65,7 @@ export async function GET(request) {
         total: totalCount,
         totalPages,
         currentPage: page,
-        limit,
-        totalChapsRead: Math.round(totalChapsRead * 10) / 10
+        limit
       }
     });
   } catch (error) {
