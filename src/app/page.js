@@ -924,18 +924,7 @@ export default function Home() {
                             if (e.key === 'Escape') setEditingChapId(null);
                           }}
                           autoFocus
-                          style={{
-                            width: '50px',
-                            textAlign: 'center',
-                            padding: '2px 4px',
-                            borderRadius: '4px',
-                            border: '1px solid var(--primary-color)',
-                            backgroundColor: 'var(--bg-primary)',
-                            color: 'var(--text-primary)',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            outline: 'none'
-                          }}
+                          className="inline-chap-input"
                         />
                       ) : (
                         <span

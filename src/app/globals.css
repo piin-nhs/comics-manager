@@ -363,7 +363,7 @@ body {
   border-radius: var(--input-radius);
   color: var(--text-primary);
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
   outline: none;
   transition: border-color 0.2s;
 }
@@ -582,6 +582,19 @@ body {
   color: var(--text-secondary);
 }
 
+.inline-chap-input {
+  width: 50px;
+  text-align: center;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid var(--primary-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  outline: none;
+}
+
 /* Modals & Forms */
 .modal-overlay {
   position: fixed;
@@ -758,28 +771,126 @@ body {
 }
 
 /* Responsive Overrides */
+@media (max-width: 768px) {
+  .inline-chap-input {
+    font-size: 16px;
+    width: 60px;
+  }
+}
+
 @media (max-width: 640px) {
-  .toolbar-container {
+  .app-container {
+    padding: 16px 12px;
+  }
+
+  /* Header mobile optimization */
+  .header-wrapper {
     flex-direction: column;
-  }
-
-  .filter-row {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .filter-buttons {
-    justify-content: flex-start;
-  }
-
-  .stat-card {
-    padding: 16px;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    padding-bottom: 16px;
   }
 
   .brand-title {
-    font-size: 22px;
+    font-size: 24px;
+    justify-content: center;
+    text-align: center;
+    width: 100%;
+  }
+
+  .controls-group {
+    width: 100%;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .controls-group .btn {
+    flex: 1;
+    justify-content: center;
+    font-size: 13px;
+    padding: 8px 12px;
+    height: 36px;
+  }
+
+  .controls-group .btn-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+  }
+
+  /* Toolbar mobile optimization */
+  .toolbar-container {
+    padding: 12px !important;
+  }
+
+  .search-input-wrapper {
+    width: 100%;
+  }
+
+  .custom-select-wrapper {
+    width: 100%;
+  }
+
+  .custom-select-trigger {
+    width: 100%;
+  }
+
+  /* Comic Grid stacking */
+  .comics-grid {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  /* Modal safe display */
+  .modal-overlay {
+    padding: 12px;
+  }
+
+  .modal-content {
+    width: 100%;
+    padding: 20px;
+    margin: 0;
+  }
+
+  /* Toast notification centered */
+  .toast-container {
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+  }
+
+  .toast {
+    width: 100%;
+    justify-content: center;
   }
 }
+
+@media (max-width: 480px) {
+  /* Smaller action buttons inside card on small screens */
+  .card-actions-v2 {
+    gap: 4px;
+  }
+
+  .card-nav-btn {
+    font-size: 11px;
+    padding: 8px 6px;
+  }
+
+  .card-actions-v2 .btn-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Pagination styling */
+  .page-btn {
+    min-width: 30px;
+    height: 30px;
+    font-size: 12px;
+    padding: 0 4px;
+  }
+}
+
 
 /* Custom Select Combobox Styling */
 .sort-select,
