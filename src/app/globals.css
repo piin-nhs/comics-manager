@@ -8,23 +8,23 @@
   --border-color: #e2e8f0;
   --shadow-color: rgba(15, 23, 42, 0.08);
   --shadow-hover: rgba(15, 23, 42, 0.12);
-  
+
   --primary-color: #6366f1;
   --primary-hover: #4f46e5;
   --primary-light: #e0e7ff;
-  
+
   --success: #10b981;
   --success-light: #d1fae5;
   --success-text: #065f46;
-  
+
   --warning: #f59e0b;
   --warning-light: #fef3c7;
   --warning-text: #92400e;
-  
+
   --danger: #ef4444;
   --danger-light: #fee2e2;
   --danger-text: #991b1b;
-  
+
   --info: #06b6d4;
   --info-light: #ecfeff;
   --info-text: #155e75;
@@ -42,23 +42,23 @@
   --border-color: #1e293b;
   --shadow-color: rgba(0, 0, 0, 0.25);
   --shadow-hover: rgba(0, 0, 0, 0.35);
-  
+
   --primary-color: #8b5cf6;
   --primary-hover: #7c3aed;
   --primary-light: #2e1065;
-  
+
   --success: #10b981;
   --success-light: #064e3b;
   --success-text: #a7f3d0;
-  
+
   --warning: #f59e0b;
-  --warning-light: #78350f;
-  --warning-text: #fde68a;
-  
+  --warning-light: #5c2a0c;
+  --warning-text: #f5e4a1;
+
   --danger: #ef4444;
   --danger-light: #7f1d1d;
   --danger-text: #fca5a5;
-  
+
   --info: #06b6d4;
   --info-light: #164e63;
   --info-text: #cffafe;
@@ -174,10 +174,25 @@ body {
   border-radius: 12px;
 }
 
-.stat-icon-wrapper.primary { background-color: var(--primary-light); color: var(--primary-color); }
-.stat-icon-wrapper.success { background-color: var(--success-light); color: var(--success); }
-.stat-icon-wrapper.warning { background-color: var(--warning-light); color: var(--warning); }
-.stat-icon-wrapper.danger { background-color: var(--danger-light); color: var(--danger); }
+.stat-icon-wrapper.primary {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+}
+
+.stat-icon-wrapper.success {
+  background-color: var(--success-light);
+  color: var(--success);
+}
+
+.stat-icon-wrapper.warning {
+  background-color: var(--warning-light);
+  color: var(--warning);
+}
+
+.stat-icon-wrapper.danger {
+  background-color: var(--danger-light);
+  color: var(--danger);
+}
 
 .stat-info {
   display: flex;
@@ -262,10 +277,25 @@ body {
   border-radius: 20px;
 }
 
-.badge-reading { background-color: var(--primary-light); color: var(--primary-color); }
-.badge-completed { background-color: var(--success-light); color: var(--success); }
-.badge-on-hold { background-color: var(--warning-light); color: var(--warning); }
-.badge-dropped { background-color: var(--danger-light); color: var(--danger); }
+.badge-reading {
+  background-color: var(--primary-light);
+  color: var(--primary-color);
+}
+
+.badge-completed {
+  background-color: var(--success-light);
+  color: var(--success);
+}
+
+.badge-on-hold {
+  background-color: var(--warning-light);
+  color: var(--warning);
+}
+
+.badge-dropped {
+  background-color: var(--danger-light);
+  color: var(--danger);
+}
 
 /* Quick Status Selector Dropdown wrapper */
 .status-dropdown-wrapper {
@@ -281,7 +311,7 @@ body {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
   z-index: 10;
   min-width: 130px;
   overflow: hidden;
@@ -572,7 +602,7 @@ body {
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--card-radius);
-  box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
   width: 100%;
   max-width: 500px;
   padding: 28px;
@@ -629,7 +659,8 @@ body {
   cursor: pointer;
 }
 
-.import-section:hover, .import-section.dragover {
+.import-section:hover,
+.import-section.dragover {
   border-color: var(--primary-color);
   background-color: var(--primary-light);
 }
@@ -671,29 +702,59 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   animation: slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.toast-success { background-color: var(--success); }
-.toast-danger { background-color: var(--danger); }
-.toast-info { background-color: var(--info); }
-.toast-warning { background-color: var(--warning); }
+.toast-success {
+  background-color: var(--success);
+}
+
+.toast-danger {
+  background-color: var(--danger);
+}
+
+.toast-info {
+  background-color: var(--info);
+}
+
+.toast-warning {
+  background-color: var(--warning);
+}
 
 /* Animations */
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 @keyframes slideInRight {
-  from { transform: translateX(100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 /* Responsive Overrides */
@@ -701,23 +762,28 @@ body {
   .toolbar-container {
     flex-direction: column;
   }
+
   .filter-row {
     flex-direction: column;
     align-items: stretch;
   }
+
   .filter-buttons {
     justify-content: flex-start;
   }
+
   .stat-card {
     padding: 16px;
   }
+
   .brand-title {
     font-size: 22px;
   }
 }
 
 /* Custom Select Combobox Styling */
-.sort-select, select.form-control {
+.sort-select,
+select.form-control {
   appearance: none !important;
   -webkit-appearance: none !important;
   -moz-appearance: none !important;
@@ -735,16 +801,20 @@ body {
   outline: none;
 }
 
-.sort-select:hover, select.form-control:hover {
+.sort-select:hover,
+select.form-control:hover {
   border-color: var(--primary-color);
 }
 
-.sort-select:focus, select.form-control:focus {
+.sort-select:focus,
+select.form-control:focus {
   border-color: var(--primary-color);
 }
 
 /* Hide Next.js Dev overlay badge (hộp logo N của Next) */
-next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
+next-dev-overlay,
+#__next-prerender-indicator,
+.nextjs-static-indicator {
   display: none !important;
 }
 
@@ -830,7 +900,8 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
 /* Card View v2 (Danh sách dạng thẻ cá nhân) */
 .comics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); /* Tăng chiều rộng tối thiểu để thẻ rộng rãi */
+  grid-template-columns: repeat(auto-fill, minmax(330px, 1fr));
+  /* Tăng chiều rộng tối thiểu để thẻ rộng rãi */
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -841,7 +912,8 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
   border-radius: var(--card-radius);
   padding: 16px;
   display: flex;
-  flex-direction: column; /* Xếp dọc theo bố cục cũ và chuẩn */
+  flex-direction: column;
+  /* Xếp dọc theo bố cục cũ và chuẩn */
   gap: 12px;
   box-shadow: 0 4px 6px var(--shadow-color);
   transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
@@ -854,19 +926,30 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
   box-shadow: 0 10px 20px var(--shadow-hover);
 }
 
+.comic-card-v2.read-completed:hover {
+  border-color: var(--success);
+}
+
 .comic-card-v2:hover .card-title-v2 {
   color: var(--primary-color);
 }
 
+.comic-card-v2.read-completed:hover .card-title-v2 {
+  color: var(--success);
+}
+
 .card-top-info {
   display: flex;
-  align-items: stretch; /* Để phần chữ chi tiết cao bằng ảnh */
+  align-items: stretch;
+  /* Để phần chữ chi tiết cao bằng ảnh */
   gap: 14px;
 }
 
 .card-thumb {
-  width: 105px; /* Tăng kích thước ảnh rộng hơn */
-  height: 147px; /* Tỉ lệ 1:1.4 chuẩn ảnh bìa truyện */
+  width: 105px;
+  /* Tăng kích thước ảnh rộng hơn */
+  height: 147px;
+  /* Tỉ lệ 1:1.4 chuẩn ảnh bìa truyện */
   border-radius: 8px;
   object-fit: cover;
   flex-shrink: 0;
@@ -888,19 +971,22 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
 .card-details {
   display: flex;
   flex-direction: column;
-  justify-content: space-between; /* Đẩy tên truyện lên trên cùng, thời gian cập nhật xuống dưới cùng */
+  justify-content: space-between;
+  /* Đẩy tên truyện lên trên cùng, thời gian cập nhật xuống dưới cùng */
   min-width: 0;
   flex-grow: 1;
   padding: 4px 0;
 }
 
 .card-title-v2 {
-  font-size: 16px; /* Tăng size chữ một chút cho nổi bật */
+  font-size: 16px;
+  /* Tăng size chữ một chút cho nổi bật */
   font-weight: 700;
   color: var(--text-primary);
   line-height: 1.4;
   display: -webkit-box;
-  -webkit-line-clamp: 3; /* Hiển thị tối đa 3 dòng */
+  -webkit-line-clamp: 3;
+  /* Hiển thị tối đa 3 dòng */
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
@@ -918,6 +1004,21 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
   align-self: flex-start;
   border: 1px solid var(--border-color);
 }
+
+.card-unread-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--warning-text);
+  background-color: var(--warning-light);
+  padding: 3px 8px;
+  border-radius: 6px;
+  display: inline-block;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  transition: all 0.2s ease;
+}
+
+
+
 
 .current-link {
   font-size: 12px;
@@ -989,7 +1090,8 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
   background-color: var(--primary-hover);
 }
 
-.card-nav-btn.disabled, .card-nav-btn:disabled {
+.card-nav-btn.disabled,
+.card-nav-btn:disabled {
   background-color: var(--bg-primary) !important;
   color: var(--text-secondary) !important;
   border: 1px solid var(--border-color) !important;
@@ -1022,7 +1124,8 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.custom-select-trigger:hover, .custom-select-trigger:focus {
+.custom-select-trigger:hover,
+.custom-select-trigger:focus {
   border-color: var(--primary-color);
 }
 
@@ -1092,6 +1195,7 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
     transform: scale(1);
     box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
   }
+
   100% {
     transform: scale(1.05);
     box-shadow: 0 0 12px rgba(16, 185, 129, 0.8);
@@ -1115,10 +1219,12 @@ next-dev-overlay, #__next-prerender-indicator, .nextjs-static-indicator {
     transform: scale(0.9);
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
   }
+
   70% {
     transform: scale(1.1);
     box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
   }
+
   100% {
     transform: scale(0.9);
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);

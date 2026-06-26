@@ -1,18 +1,18 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Plus, 
+import {
+  Plus,
   Minus,
-  Search, 
-  Moon, 
-  Sun, 
-  ExternalLink, 
-  Copy, 
-  Check, 
-  Trash2, 
-  Edit3, 
-  X, 
+  Search,
+  Moon,
+  Sun,
+  ExternalLink,
+  Copy,
+  Check,
+  Trash2,
+  Edit3,
+  X,
   ChevronLeft,
   ChevronRight,
   ChevronDown,
@@ -29,9 +29,9 @@ const getRelativeTime = (dateStr) => {
     const date = new Date(dateStr);
     const now = new Date();
     const diffMs = now - date;
-    
+
     if (diffMs < 0) return 'vừa xong';
-    
+
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);
@@ -40,7 +40,7 @@ const getRelativeTime = (dateStr) => {
     if (diffMins < 60) return `${diffMins} phút trước`;
     if (diffHours < 24) return `${diffHours} giờ trước`;
     if (diffDays < 30) return `${diffDays} ngày trước`;
-    
+
     return date.toLocaleDateString('vi-VN', {
       day: '2-digit',
       month: '2-digit',
@@ -57,7 +57,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('updatedAt_desc');
-  
+
   // State phân trang
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -69,9 +69,9 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState('add'); // 'add' hoặc 'edit'
   const [selectedStory, setSelectedStory] = useState(null);
-  
 
-  
+
+
   // State Form nhập liệu
   const [formData, setFormData] = useState({
     title: '',
@@ -81,11 +81,11 @@ export default function Home() {
     rating: 0,
     totalChaps: ''
   });
-  
+
   // State cấu hình & phụ trợ
   const [theme, setTheme] = useState('dark');
   const [toasts, setToasts] = useState([]);
-  
+
   // State custom select (combobox)
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const sortDropdownRef = useRef(null);
@@ -117,7 +117,7 @@ export default function Home() {
       showToast('Vui lòng dán link đọc để tự động quét số chap', 'info');
       return;
     }
-    
+
     showToast('Đang quét tự động tổng số chap...', 'info');
     try {
       const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(url)}`);
@@ -167,7 +167,7 @@ export default function Home() {
 
     stories.forEach((story, index) => {
       if (!story.url) return;
-      
+
       const cacheKey = `scan_bg_${story._id}`;
       // Chỉ quét 1 lần duy nhất trên client cho mỗi câu chuyện trong phiên làm việc để tránh spam
       if (window[cacheKey]) return;
@@ -278,7 +278,7 @@ export default function Home() {
         showToast('Số chap đã đọc không được bằng 0 hoặc âm. Đã tự động điều chỉnh về 1.', 'warning');
         formData.chap = '1';
       }
-      
+
       const total = parseFloat(formData.totalChaps) || 0;
       if (total > 0 && numVal > total) {
         showToast(`Số chap đã đọc không được lớn hơn tổng số chap (${total}). Đã tự động điều chỉnh về ${total}.`, 'warning');
@@ -361,20 +361,20 @@ export default function Home() {
       showToast('Chap hiện tại chứa chữ, vui lòng click để sửa thủ công', 'info');
       return;
     }
-    
+
     let nextChapVal = Math.round((num + delta) * 100) / 100;
-    
+
     // Giới hạn dưới: không được bằng 0 và không được âm (clamp ở 1)
     if (nextChapVal < 1) {
       nextChapVal = 1;
     }
-    
+
     // Giới hạn trên: không được lớn hơn số chap tổng (nếu có số chap tổng hợp lệ)
     const total = parseFloat(story.totalChaps) || 0;
     if (total > 0 && nextChapVal > total) {
       nextChapVal = total;
     }
-    
+
     const newChap = nextChapVal.toString();
     if (newChap === story.chap) {
       return; // Đã đạt giới hạn, không cần lưu lại
@@ -404,7 +404,7 @@ export default function Home() {
         showToast('Số chap không được bằng 0 hoặc âm. Đã điều chỉnh về 1.', 'warning');
         val = '1';
       }
-      
+
       const total = parseFloat(story.totalChaps) || 0;
       if (total > 0 && numVal > total) {
         showToast(`Số chap không được lớn hơn tổng số chap (${total}). Đã điều chỉnh về ${total}.`, 'warning');
@@ -429,7 +429,7 @@ export default function Home() {
       if (data.success) {
         setStories(prev => prev.map(s => s._id === id ? { ...s, chap: chapVal } : s));
         showToast(`Đã cập nhật "${title}" lên chap ${chapVal}`);
-        
+
         // Pháo hoa nhẹ
         confetti({ particleCount: 30, angle: 60, spread: 55, origin: { x: 0 } });
         confetti({ particleCount: 30, angle: 120, spread: 55, origin: { x: 1 } });
@@ -445,19 +445,19 @@ export default function Home() {
   // Helper thay thế số chương trong URL
   const replaceChapInUrl = (url, chapStr) => {
     if (!url) return '';
-    
+
     const regex = /(chuong|chap|chapter|c|vol|tập|tap|episode|ep|[-_]+)(\d+(\.\d+)?)(?=\/*$|[?#])/i;
     const match = url.match(regex);
     if (match) {
       const fullMatch = match[0];
       const prefix = fullMatch.replace(match[2], '');
-      
+
       const lastIndex = url.lastIndexOf(fullMatch);
       if (lastIndex !== -1) {
         return url.substring(0, lastIndex) + prefix + chapStr + url.substring(lastIndex + fullMatch.length);
       }
     }
-    
+
     const endNumRegex = /\/(\d+(\.\d+)?)(?=\/*$|[?#])/;
     const endNumMatch = url.match(endNumRegex);
     if (endNumMatch) {
@@ -467,7 +467,7 @@ export default function Home() {
         return url.substring(0, lastIndex) + '/' + chapStr + url.substring(lastIndex + 1 + numberStr.length);
       }
     }
-    
+
     return url;
   };
 
@@ -494,7 +494,7 @@ export default function Home() {
       showToast('Truyện này chưa gắn link đọc', 'info');
       return;
     }
-    
+
     navigator.clipboard.writeText(nextUrl);
     setCopiedId(story._id);
     showToast('Đã sao chép link chương tiếp theo!');
@@ -598,20 +598,20 @@ export default function Home() {
         <div style={{ display: 'flex', gap: '12px', width: '100%', alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="search-input-wrapper">
             <Search size={18} className="search-icon" />
-            <input 
-              type="text" 
-              placeholder="Nhập tên truyện cần tìm..." 
+            <input
+              type="text"
+              placeholder="Nhập tên truyện cần tìm..."
               className="form-control"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          
+
           {/* Custom Select dropdown (Combobox) */}
           <div className="custom-select-wrapper" ref={sortDropdownRef}>
-            <button 
-              type="button" 
-              className="custom-select-trigger" 
+            <button
+              type="button"
+              className="custom-select-trigger"
               onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
             >
               <span>{currentSortOption.label}</span>
@@ -620,8 +620,8 @@ export default function Home() {
             {isSortDropdownOpen && (
               <div className="custom-select-options">
                 {sortOptions.map(option => (
-                  <div 
-                    key={option.value} 
+                  <div
+                    key={option.value}
                     className={`custom-select-option ${sortBy === option.value ? 'selected' : ''}`}
                     onClick={() => {
                       setSortBy(option.value);
@@ -661,18 +661,19 @@ export default function Home() {
               const totalChapNum = parseFloat(story.totalChaps) || 0;
               const hasNewChap = totalChapNum > currentChapNum;
               const isReadComplete = totalChapNum > 0 && currentChapNum >= totalChapNum;
-              
+              const unreadCount = totalChapNum > currentChapNum ? Number((totalChapNum - currentChapNum).toFixed(2)) : 0;
+
               return (
-                <div key={story._id} className="comic-card-v2">
-                  
+                <div key={story._id} className={`comic-card-v2 ${isReadComplete ? 'read-completed' : ''}`}>
+
                   {/* Dòng đầu: Ảnh bìa + Tên truyện (Không còn chữ tên miền bên dưới) */}
                   <div className="card-top-info">
                     <div className="card-thumb-wrapper" style={{ position: 'relative', flexShrink: 0 }}>
                       {story.coverUrl ? (
-                        <img 
-                          src={story.coverUrl} 
-                          alt={story.title} 
-                          className="card-thumb" 
+                        <img
+                          src={story.coverUrl}
+                          alt={story.title}
+                          className="card-thumb"
                           onClick={() => window.open(story.coverUrl, '_blank')}
                           title="Click để phóng to ảnh bìa"
                         />
@@ -685,13 +686,13 @@ export default function Home() {
                     </div>
                     <div className="card-details">
                       <h4 className="card-title-v2" title={story.title}>{story.title}</h4>
-                      
+
                       {/* Đánh giá số sao */}
                       <div className="card-rating-stars" title={`Đánh giá: ${story.rating || 0}/5 sao`} style={{ display: 'flex', gap: '2px', margin: '4px 0' }}>
                         {Array.from({ length: 5 }).map((_, idx) => (
-                          <Star 
-                            key={idx} 
-                            size={13} 
+                          <Star
+                            key={idx}
+                            size={13}
                             style={{
                               fill: idx < (story.rating || 0) ? '#fbbf24' : 'none',
                               color: idx < (story.rating || 0) ? '#fbbf24' : 'var(--border-color)',
@@ -704,16 +705,31 @@ export default function Home() {
                       {(() => {
                         const current = parseFloat(story.chap) || 0;
                         const total = parseFloat(story.totalChaps) || 0;
-                        const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 0;
-                        
+                        const percent = total > 0
+                          ? (current >= total ? 100 : Math.min(99, Math.round((current / total) * 100)))
+                          : 0;
+
                         return total > 0 ? (
                           <div className="card-progress-wrapper" style={{ margin: '4px 0 8px 0' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '2px' }}>
+                            <div style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              fontSize: '11px',
+                              fontWeight: '700',
+                              color: percent === 100 ? 'var(--success)' : 'var(--text-secondary)',
+                              marginBottom: '2px'
+                            }}>
                               <span>Tiến độ: {story.chap}/{story.totalChaps} chap</span>
-                              <span>{percent}%</span>
+                              <span style={{ color: percent === 100 ? 'var(--success)' : 'inherit' }}>{percent}%</span>
                             </div>
                             <div style={{ width: '100%', height: '5px', backgroundColor: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
-                              <div style={{ width: `${percent}%`, height: '100%', backgroundColor: 'var(--primary-color)', borderRadius: '3px', transition: 'width 0.3s ease' }} />
+                              <div style={{
+                                width: `${percent}%`,
+                                height: '100%',
+                                backgroundColor: percent === 100 ? 'var(--success)' : 'var(--primary-color)',
+                                borderRadius: '3px',
+                                transition: 'width 0.3s ease'
+                              }} />
                             </div>
                           </div>
                         ) : (
@@ -723,10 +739,15 @@ export default function Home() {
                         );
                       })()}
 
-                      <div className="card-meta-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', width: '100%', gap: '8px' }}>
+                      <div className="card-meta-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'auto', width: '100%', flexWrap: 'wrap' }}>
                         {story.updatedAt && (
                           <span className="card-update-time" title="Cập nhật cuối">
                             {getRelativeTime(story.updatedAt)}
+                          </span>
+                        )}
+                        {unreadCount > 0 && (
+                          <span className="card-unread-count" title="Số chap chưa đọc">
+                            {unreadCount}
                           </span>
                         )}
                       </div>
@@ -736,11 +757,11 @@ export default function Home() {
                   {/* Dòng giữa: Thay "Đã đọc tới:" bằng Link chương hiện tại nếu có */}
                   <div className="card-chap-row">
                     {story.url ? (
-                      <a 
-                        href={currentUrl} 
-                        target="comic_reader" 
-                        rel="noopener noreferrer" 
-                        className="current-link" 
+                      <a
+                        href={currentUrl}
+                        target="comic_reader"
+                        rel="noopener noreferrer"
+                        className="current-link"
                         title="Mở chương hiện tại bạn đã đọc"
                       >
                         <span>Link hiện tại</span>
@@ -752,15 +773,15 @@ export default function Home() {
 
                     {/* Bộ tăng giảm số chap */}
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      <button 
-                        className="chap-quick-btn" 
+                      <button
+                        className="chap-quick-btn"
                         onClick={() => handleQuickChapStep(story, -1)}
                         disabled={parseFloat(story.chap) <= 1}
                         title="Giảm 1 chap"
                       >
                         <Minus size={12} />
                       </button>
-                      
+
                       {editingChapId === story._id ? (
                         <input
                           type="text"
@@ -786,7 +807,7 @@ export default function Home() {
                           }}
                         />
                       ) : (
-                        <span 
+                        <span
                           onClick={() => startInlineEdit(story)}
                           title="Click để sửa nhanh"
                           style={{
@@ -806,9 +827,9 @@ export default function Home() {
                           {story.chap}
                         </span>
                       )}
-                      
-                      <button 
-                        className="chap-quick-btn" 
+
+                      <button
+                        className="chap-quick-btn"
                         onClick={() => handleQuickChapStep(story, 1)}
                         disabled={parseFloat(story.totalChaps) > 0 && parseFloat(story.chap) >= parseFloat(story.totalChaps)}
                         title="Tăng 1 chap"
@@ -823,18 +844,18 @@ export default function Home() {
                     {story.url && (
                       <>
                         {isReadComplete ? (
-                          <button 
-                            className="card-nav-btn disabled" 
+                          <button
+                            className="card-nav-btn disabled"
                             disabled
                             title="Bạn đã đọc hết chương mới nhất"
                           >
                             <span>Hết chap mới</span>
                           </button>
                         ) : (
-                          <a 
-                            href={nextUrl} 
-                            target="comic_reader" 
-                            rel="noopener noreferrer" 
+                          <a
+                            href={nextUrl}
+                            target="comic_reader"
+                            rel="noopener noreferrer"
                             className={`card-nav-btn ${hasNewChap ? 'has-new-chap' : ''}`}
                             title={`Đọc Chap ${nextChapNum}`}
                           >
@@ -843,10 +864,10 @@ export default function Home() {
                             <ExternalLink size={12} />
                           </a>
                         )}
-                        
-                        <button 
-                          className="btn-icon" 
-                          onClick={() => handleCopyLink(story)} 
+
+                        <button
+                          className="btn-icon"
+                          onClick={() => handleCopyLink(story)}
                           style={{ width: '32px', height: '32px', borderRadius: '8px' }}
                           title="Copy link chương tiếp theo"
                         >
@@ -856,19 +877,19 @@ export default function Home() {
                       </>
                     )}
 
-                    <button 
-                      className="btn-icon" 
-                      onClick={() => openEditModal(story)} 
-                      style={{ width: '32px', height: '32px', borderRadius: '8px', marginLeft: story.url ? '0' : 'auto' }} 
+                    <button
+                      className="btn-icon"
+                      onClick={() => openEditModal(story)}
+                      style={{ width: '32px', height: '32px', borderRadius: '8px', marginLeft: story.url ? '0' : 'auto' }}
                       title="Sửa thông tin"
                     >
                       <Edit3 size={12} />
                     </button>
-                    
-                    <button 
-                      className="btn-icon" 
-                      onClick={() => handleDelete(story)} 
-                      style={{ width: '32px', height: '32px', borderRadius: '8px', color: 'var(--danger)' }} 
+
+                    <button
+                      className="btn-icon"
+                      onClick={() => handleDelete(story)}
+                      style={{ width: '32px', height: '32px', borderRadius: '8px', color: 'var(--danger)' }}
                       title="Xóa truyện"
                     >
                       <Trash2 size={12} />
@@ -884,15 +905,15 @@ export default function Home() {
           {totalPages > 1 && (
             <div className="pagination-container">
               <div className="pagination-buttons">
-                <button 
-                  className="page-btn" 
+                <button
+                  className="page-btn"
                   onClick={() => handlePageChange(page - 1)}
                   disabled={page === 1}
                   title="Trang trước"
                 >
                   <ChevronLeft size={16} />
                 </button>
-                
+
                 {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
                   if (totalPages > 7 && Math.abs(p - page) > 2 && p !== 1 && p !== totalPages) {
                     if (p === 2 || p === totalPages - 1) {
@@ -902,8 +923,8 @@ export default function Home() {
                   }
 
                   return (
-                    <button 
-                      key={p} 
+                    <button
+                      key={p}
                       className={`page-btn ${page === p ? 'active' : ''}`}
                       onClick={() => handlePageChange(p)}
                     >
@@ -912,8 +933,8 @@ export default function Home() {
                   );
                 })}
 
-                <button 
-                  className="page-btn" 
+                <button
+                  className="page-btn"
                   onClick={() => handlePageChange(page + 1)}
                   disabled={page === totalPages}
                   title="Trang sau"
@@ -921,7 +942,7 @@ export default function Home() {
                   <ChevronRight size={16} />
                 </button>
               </div>
-              
+
               <span className="page-info-text">
                 Hiển thị {stories.length}/{totalStories} bộ truyện
               </span>
@@ -942,13 +963,13 @@ export default function Home() {
                 <X size={18} />
               </button>
             </div>
-            
+
             <form onSubmit={handleSubmit}>
               <div className="form-group">
                 <label className="form-label">Tên Truyện <span style={{ color: 'var(--danger)' }}>*</span></label>
-                <input 
-                  type="text" 
-                  className="form-control" 
+                <input
+                  type="text"
+                  className="form-control"
                   placeholder="Nhập tên truyện..."
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -958,11 +979,11 @@ export default function Home() {
 
               <div className="form-group">
                 <label className="form-label">Số Chap Đã Đọc</label>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   step="1"
                   min="1"
-                  className="form-control" 
+                  className="form-control"
                   placeholder="Nhập số chương đã đọc..."
                   value={formData.chap}
                   onChange={(e) => setFormData({ ...formData, chap: e.target.value })}
@@ -971,9 +992,9 @@ export default function Home() {
 
               <div className="form-group">
                 <label className="form-label">Link Đọc Chương Hiện Tại (URL)</label>
-                <input 
-                  type="url" 
-                  className="form-control" 
+                <input
+                  type="url"
+                  className="form-control"
                   placeholder="Dán link chương bạn đã đọc (ví dụ: https://.../chuong-46)..."
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
@@ -987,9 +1008,9 @@ export default function Home() {
 
               <div className="form-group">
                 <label className="form-label">Link Ảnh Bìa Truyện (Cover Image URL)</label>
-                <input 
-                  type="url" 
-                  className="form-control" 
+                <input
+                  type="url"
+                  className="form-control"
                   placeholder="Dán link ảnh bìa truyện tranh (tùy chọn)..."
                   value={formData.coverUrl}
                   onChange={(e) => setFormData({ ...formData, coverUrl: e.target.value })}
@@ -1024,8 +1045,8 @@ export default function Home() {
                           }}
                           title={`${starVal} sao`}
                         >
-                          <Star 
-                            size={24} 
+                          <Star
+                            size={24}
                             style={{
                               fill: starVal <= formData.rating ? '#fbbf24' : 'none',
                               color: starVal <= formData.rating ? '#fbbf24' : 'var(--border-color)',
