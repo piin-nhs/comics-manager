@@ -1100,17 +1100,43 @@ export default function Home() {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Số Chap Đã Đọc</label>
-                <input
-                  type="number"
-                  step="1"
-                  min="1"
-                  className="form-control"
-                  placeholder="Nhập số chương đã đọc..."
-                  value={formData.chap}
-                  onChange={(e) => setFormData({ ...formData, chap: e.target.value })}
-                />
+              <div className="form-row-2col">
+                <div className="form-group">
+                  <label className="form-label">Số Chap Đã Đọc</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    className="form-control"
+                    placeholder="Nhập số chương đã đọc..."
+                    value={formData.chap}
+                    onChange={(e) => setFormData({ ...formData, chap: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Tổng Số Chap</label>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="number"
+                      step="1"
+                      min="1"
+                      className="form-control"
+                      placeholder="Tổng số chương..."
+                      value={formData.totalChaps}
+                      onChange={(e) => setFormData({ ...formData, totalChaps: e.target.value })}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-outline"
+                      onClick={() => autoDetectTotalChaps()}
+                      title="Tự động quét số chap từ link đọc"
+                      style={{ padding: '0 12px', fontSize: '13px', whiteSpace: 'nowrap' }}
+                    >
+                      Quét
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="form-group">
