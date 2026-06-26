@@ -64,7 +64,7 @@ export default function Home() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalStories, setTotalStories] = useState(0);
   const [totalChapsRead, setTotalChapsRead] = useState(0);
-  const limit = 24; // 24 truyện mỗi trang (chia hết cho 2, 3, 4 giúp chia đều thẻ, tránh bị lẻ)
+  const limit = 6; // Giới hạn 6 truyện mỗi trang để tăng hiệu năng và tránh bị lag
 
   // State quản lý giao diện Modal
   const [isModalOpen, setIsModalOpen] = useState(false);

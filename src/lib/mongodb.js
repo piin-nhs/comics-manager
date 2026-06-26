@@ -10,19 +10,14 @@ const options = {};
 let client;
 let clientPromise;
 
-if (process.env.NODE_ENV === 'development') {
-  // Trong môi trường development, sử dụng biến global để cache kết nối
-  // tránh tạo mới kết nối liên tục khi Next.js reload (HMR).
-  if (!global._mongoClientPromise) {
-    client = new MongoClient(uri, options);
-    global._mongoClientPromise = client.connect();
-  }
-  clientPromise = global._mongoClientPromise;
-} else {
-  // Trong môi trường production, kết nối trực tiếp bình thường.
+// Sử dụng biến global để cache kết nối MongoClient ở cả Dev và Production.
+// Điều này cực kỳ quan trọng trên Vercel (Serverless) để tái sử dụng connection pool,
+// tránh tạo mới kết nối liên tục gây trễ (Handshake/SSL) và cạn kiệt số lượng connection.
+if (!global._mongoClientPromise) {
   client = new MongoClient(uri, options);
-  clientPromise = client.connect();
+  global._mongoClientPromise = client.connect();
 }
+clientPromise = global._mongoClientPromise;
 
 // Export kết nối MongoClient
 export default clientPromise;
