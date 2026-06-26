@@ -1252,3 +1252,19 @@ next-dev-overlay,
 .star-selector-btn:active svg {
   transform: scale(0.9);
 }
+
+/* Premium Skeleton Loader Animations */
+.skeleton-block, .skeleton-line {
+  background: linear-gradient(90deg, var(--border-color) 25%, var(--bg-primary) 50%, var(--border-color) 75%);
+  background-size: 200% 100%;
+  animation: loading-pulse 1.4s infinite linear;
+}
+
+@keyframes loading-pulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

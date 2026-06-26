@@ -308,6 +308,27 @@ export default function Home() {
     }
   };
 
+  // Tải trước dữ liệu của trang khác khi di chuột vào nút phân trang (Hover Prefetching)
+  const prefetchPage = async (p) => {
+    if (p < 1 || p > totalPages) return;
+    const cacheKey = `${p}_${debouncedSearchQuery}_${sortBy}`;
+    if (searchCache.current.has(cacheKey)) return;
+
+    try {
+      const res = await fetch(`/api/stories?page=${p}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}`);
+      const data = await res.json();
+      if (data.success && data.pagination) {
+        searchCache.current.set(cacheKey, {
+          data: data.data,
+          totalPages: data.pagination.totalPages || 1,
+          total: data.pagination.total || 0
+        });
+      }
+    } catch (err) {
+      console.error("Prefetch error:", err);
+    }
+  };
+
   // Thêm mới hoặc chỉnh sửa truyện
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -651,18 +672,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Grid thống kê Dashboard */}
-      <section className="stats-grid" style={{ marginBottom: '20px' }}>
-        <div className="stat-card">
-          <div className="stat-icon-wrapper primary">
-            <BookOpen size={20} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-label">Tổng số bộ truyện</span>
-            <span className="stat-val">{totalStories}</span>
-          </div>
-        </div>
-      </section>
+
 
       {/* Thanh tìm kiếm và bộ sắp xếp */}
       <section className="toolbar-container glass-card" style={{ padding: '16px' }}>
@@ -710,10 +720,26 @@ export default function Home() {
 
       {/* Danh sách truyện dạng THẺ CÁ NHÂN (Cards Grid) */}
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-secondary)' }}>
-          <div className="brand-title" style={{ justifyContent: 'center' }}>
-            <span>Đang tải danh sách truyện...</span>
-          </div>
+        <div className="comics-grid">
+          {Array.from({ length: limit }).map((_, idx) => (
+            <div key={idx} className="comic-card-v2 skeleton" style={{ minHeight: '230px', opacity: 0.7 }}>
+              <div className="card-top-info">
+                <div className="card-thumb skeleton-block" style={{ width: '105px', height: '147px', borderRadius: '8px', border: 'none' }} />
+                <div className="card-details" style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'flex-start', padding: '4px 0' }}>
+                  <div className="skeleton-line" style={{ width: '80%', height: '18px', borderRadius: '4px' }} />
+                  <div className="skeleton-line" style={{ width: '50%', height: '12px', borderRadius: '4px' }} />
+                  <div className="skeleton-line" style={{ width: '100%', height: '30px', borderRadius: '4px', marginTop: '12px' }} />
+                  <div className="skeleton-line" style={{ width: '40%', height: '12px', borderRadius: '4px', marginTop: 'auto' }} />
+                </div>
+              </div>
+              <div className="card-chap-row skeleton-block" style={{ height: '34px', borderRadius: '8px', border: 'none' }} />
+              <div className="card-actions-v2" style={{ gap: '6px' }}>
+                <div className="skeleton-block" style={{ flexGrow: 1, height: '32px', borderRadius: '8px' }} />
+                <div className="skeleton-block" style={{ width: '32px', height: '32px', borderRadius: '8px' }} />
+                <div className="skeleton-block" style={{ width: '32px', height: '32px', borderRadius: '8px' }} />
+              </div>
+            </div>
+          ))}
         </div>
       ) : stories.length === 0 ? (
         <div className="glass-card" style={{ textAlign: 'center', padding: '48px 24px' }}>
@@ -979,6 +1005,7 @@ export default function Home() {
                 <button
                   className="page-btn"
                   onClick={() => handlePageChange(page - 1)}
+                  onMouseEnter={() => prefetchPage(page - 1)}
                   disabled={page === 1}
                   title="Trang trước"
                 >
@@ -998,6 +1025,7 @@ export default function Home() {
                       key={p}
                       className={`page-btn ${page === p ? 'active' : ''}`}
                       onClick={() => handlePageChange(p)}
+                      onMouseEnter={() => prefetchPage(p)}
                     >
                       {p}
                     </button>
@@ -1007,6 +1035,7 @@ export default function Home() {
                 <button
                   className="page-btn"
                   onClick={() => handlePageChange(page + 1)}
+                  onMouseEnter={() => prefetchPage(page + 1)}
                   disabled={page === totalPages}
                   title="Trang sau"
                 >
