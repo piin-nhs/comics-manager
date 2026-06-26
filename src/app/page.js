@@ -677,7 +677,7 @@ export default function Home() {
       {/* Thanh tìm kiếm và bộ sắp xếp */}
       <section className="toolbar-container glass-card" style={{ padding: '16px' }}>
         <div style={{ display: 'flex', gap: '12px', width: '100%', alignItems: 'center', flexWrap: 'wrap' }}>
-          <div className="search-input-wrapper">
+          <div className="search-input-wrapper" style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
             <Search size={18} className="search-icon" />
             <input
               type="text"
@@ -685,7 +685,28 @@ export default function Home() {
               className="form-control"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
+              style={{ paddingRight: searchQuery ? '36px' : '14px' }}
             />
+            {searchQuery && (
+              <button 
+                type="button"
+                onClick={() => setSearchQuery('')}
+                style={{
+                  position: 'absolute',
+                  right: '12px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: 0
+                }}
+                title="Xóa tìm kiếm"
+              >
+                <X size={16} />
+              </button>
+            )}
           </div>
 
           {/* Custom Select dropdown (Combobox) */}
