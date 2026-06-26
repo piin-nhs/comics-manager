@@ -1397,3 +1397,11 @@ next-dev-overlay,
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Filter active highlight: khi bộ lọc đang được chọn (khác 'all') */
+.custom-select-trigger.filter-active {
+  border-color: var(--primary-color) !important;
+  color: var(--primary-color) !important;
+  background: var(--primary-light) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--primary-color) 20%, transparent);
+}

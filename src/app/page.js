@@ -57,7 +57,7 @@ const getRelativeTime = (dateStr) => {
 const getRelativeStoryPath = (url) => {
   if (!url) return '';
   let path = url.trim();
-  
+
   // Trích xuất path nếu nhập link tuyệt đối có chứa http/https
   if (path.startsWith('http://') || path.startsWith('https://')) {
     try {
@@ -67,7 +67,7 @@ const getRelativeStoryPath = (url) => {
       console.error("Error parsing URL:", e);
     }
   }
-  
+
   // Cắt bỏ phần chương ở cuối (ví dụ: /chuong-62 -> ...)
   const regex = /\/(chuong|chap|chapter|c|vol|tập|tap|episode|ep)[-_]*(\d+(\.\d+)?)(?:\.[a-zA-Z0-9]+)?(?=\/*$|[?#]|\/)/i;
   const match = path.match(regex);
@@ -77,7 +77,7 @@ const getRelativeStoryPath = (url) => {
       path = path.substring(0, lastIndex);
     }
   }
-  
+
   // Loại bỏ dấu gạch chéo đầu và cuối để chuẩn hóa
   return path.replace(/^\/|\/$/g, '');
 };
@@ -86,7 +86,7 @@ const getRelativeStoryPath = (url) => {
 const getRelativeCoverPath = (url) => {
   if (!url) return '';
   let path = url.trim();
-  
+
   if (path.startsWith('http://') || path.startsWith('https://')) {
     try {
       const parsed = new URL(path);
@@ -100,7 +100,7 @@ const getRelativeCoverPath = (url) => {
       console.error("Error parsing cover URL:", e);
     }
   }
-  
+
   // Loại bỏ dấu gạch chéo đầu và cuối nếu là đường dẫn tương đối
   return path.startsWith('http://') || path.startsWith('https://') ? path : path.replace(/^\/|\/$/g, '');
 };
@@ -149,6 +149,11 @@ export default function Home() {
   // State custom select (combobox)
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const sortDropdownRef = useRef(null);
+
+  // State bộ lọc tiến độ đọc
+  const [filterProgress, setFilterProgress] = useState('all'); // 'all' | 'complete' | 'incomplete'
+  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
+  const filterDropdownRef = useRef(null);
 
   // State theo dõi các phần tử đang được chỉnh sửa nhanh số chap
   const [editingChapId, setEditingChapId] = useState(null);
@@ -259,7 +264,7 @@ export default function Home() {
       const data = await res.json();
       if (data.success && data.totalChaps) {
         const scannedTotal = data.totalChaps;
-        
+
         // Tạo body PATCH
         const patchBody = {
           lastScannedAt: new Date().toISOString()
@@ -272,7 +277,7 @@ export default function Home() {
         if (data.coverUrl && !story.coverUrl) {
           patchBody.coverUrl = data.coverUrl;
         }
-        
+
         // Chỉ gửi patch nếu có thay đổi
         if (patchBody.totalChaps !== undefined || patchBody.coverUrl !== undefined) {
           const patchRes = await fetch(`/api/stories/${story._id}`, {
@@ -280,14 +285,14 @@ export default function Home() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(patchBody)
           });
-          
+
           const patchData = await patchRes.json();
           if (patchData.success) {
             // Xóa cache vì dữ liệu đã đổi
             searchCache.current.clear();
             // Cập nhật state cục bộ để giao diện tiến độ cập nhật ngay lập tức
-            setStories(prev => prev.map(s => s._id === story._id ? { 
-              ...s, 
+            setStories(prev => prev.map(s => s._id === story._id ? {
+              ...s,
               totalChaps: scannedTotal,
               coverUrl: patchBody.coverUrl !== undefined ? patchBody.coverUrl : s.coverUrl,
               lastScannedAt: patchBody.lastScannedAt
@@ -342,7 +347,12 @@ export default function Home() {
   // Load danh sách truyện khi bộ lọc hoặc số trang thay đổi
   useEffect(() => {
     fetchStories();
-  }, [page, debouncedSearchQuery, sortBy]);
+  }, [page, debouncedSearchQuery, sortBy, filterProgress]);
+
+  // Reset về trang 1 khi bộ lọc tiến độ thay đổi
+  useEffect(() => {
+    setPage(1);
+  }, [filterProgress]);
 
   // Load theme
   useEffect(() => {
@@ -356,6 +366,9 @@ export default function Home() {
     function handleClickOutside(event) {
       if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target)) {
         setIsSortDropdownOpen(false);
+      }
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
+        setIsFilterDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -444,8 +457,8 @@ export default function Home() {
 
   // Gọi API lấy danh sách truyện (có phân trang)
   const fetchStories = async () => {
-    const cacheKey = `${page}_${debouncedSearchQuery}_${sortBy}`;
-    
+    const cacheKey = `${page}_${debouncedSearchQuery}_${sortBy}_${filterProgress}`;
+
     // Kiểm tra cache trên client trước để phản hồi tức thì
     if (searchCache.current.has(cacheKey)) {
       const cached = searchCache.current.get(cacheKey);
@@ -457,7 +470,7 @@ export default function Home() {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}`);
+      const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}&progress=${filterProgress}`);
       const data = await res.json();
       if (data.success) {
         setStories(data.data);
@@ -466,7 +479,7 @@ export default function Home() {
           const totalStoriesVal = data.pagination.total || 0;
           setTotalPages(totalPagesVal);
           setTotalStories(totalStoriesVal);
-          
+
           // Lưu dữ liệu vào cache client
           searchCache.current.set(cacheKey, {
             data: data.data,
@@ -488,11 +501,11 @@ export default function Home() {
   // Tải trước dữ liệu của trang khác khi di chuột vào nút phân trang (Hover Prefetching)
   const prefetchPage = async (p) => {
     if (p < 1 || p > totalPages) return;
-    const cacheKey = `${p}_${debouncedSearchQuery}_${sortBy}`;
+    const cacheKey = `${p}_${debouncedSearchQuery}_${sortBy}_${filterProgress}`;
     if (searchCache.current.has(cacheKey)) return;
 
     try {
-      const res = await fetch(`/api/stories?page=${p}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}`);
+      const res = await fetch(`/api/stories?page=${p}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}&progress=${filterProgress}`);
       const data = await res.json();
       if (data.success && data.pagination) {
         searchCache.current.set(cacheKey, {
@@ -634,7 +647,7 @@ export default function Home() {
     if (newChap === story.chap) return; // Đã đạt giới hạn, không cần lưu lại
 
     const originalChap = story.chap;
-    
+
     // Cập nhật Optimistic - đổi số chap trên giao diện lập tức (0ms delay)
     setStories(prev => prev.map(s => s._id === story._id ? { ...s, chap: newChap } : s));
     searchCache.current.clear(); // Xóa cache tìm kiếm client vì dữ liệu đã thay đổi
@@ -695,7 +708,7 @@ export default function Home() {
     if (val === story.chap) return;
 
     const originalChap = story.chap;
-    
+
     // Cập nhật Optimistic
     setStories(prev => prev.map(s => s._id === story._id ? { ...s, chap: val } : s));
     searchCache.current.clear(); // Xóa cache tìm kiếm client
@@ -898,7 +911,7 @@ export default function Home() {
               style={{ paddingRight: searchQuery ? '36px' : '14px' }}
             />
             {searchQuery && (
-              <button 
+              <button
                 type="button"
                 onClick={() => setSearchQuery('')}
                 style={{
@@ -919,7 +932,7 @@ export default function Home() {
             )}
           </div>
 
-          {/* Custom Select dropdown (Combobox) */}
+          {/* Custom Select dropdown (Combobox) - Sắp xếp */}
           <div className="custom-select-wrapper" ref={sortDropdownRef}>
             <button
               type="button"
@@ -941,6 +954,43 @@ export default function Home() {
                     }}
                   >
                     {option.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Dropdown bộ lọc tiến độ đọc */}
+          <div className="custom-select-wrapper" ref={filterDropdownRef}>
+            <button
+              type="button"
+              className={`custom-select-trigger ${filterProgress !== 'all' ? 'filter-active' : ''}`}
+              onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
+            >
+              <span>
+                {filterProgress === 'all' && 'Tiến độ: Tất cả'}
+                {filterProgress === 'complete' && 'Đọc 100%'}
+                {filterProgress === 'incomplete' && 'Chưa 100%'}
+              </span>
+              <ChevronDown size={16} className={`arrow-icon ${isFilterDropdownOpen ? 'open' : ''}`} />
+            </button>
+            {isFilterDropdownOpen && (
+              <div className="custom-select-options">
+                {[
+                  { value: 'all', label: 'Tiến độ: Tất cả' },
+                  { value: 'complete', label: 'Đọc 100%' },
+                  { value: 'incomplete', label: 'Chưa 100%' }
+                ].map(opt => (
+                  <div
+                    key={opt.value}
+                    className={`custom-select-option ${filterProgress === opt.value ? 'selected' : ''}`}
+                    onClick={() => {
+                      setFilterProgress(opt.value);
+                      setIsFilterDropdownOpen(false);
+                      searchCache.current.clear();
+                    }}
+                  >
+                    {opt.label}
                   </div>
                 ))}
               </div>

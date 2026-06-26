@@ -8,6 +8,7 @@ export async function GET(request) {
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const sort = searchParams.get('sort') || 'updatedAt_desc';
+    const progress = searchParams.get('progress') || 'all'; // 'all' | 'complete' | 'incomplete'
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
     
@@ -20,6 +21,30 @@ export async function GET(request) {
     }
     if (status) {
       query.status = status;
+    }
+    // Lọc theo tiến độ đọc: so sánh chap đã đọc với tổng số chap
+    if (progress === 'complete') {
+      // Đọc 100%: totalChaps > 0 và chap (đã parse sang số) >= totalChaps
+      query.$expr = {
+        $and: [
+          { $gt: [{ $toDouble: { $ifNull: ['$totalChaps', 0] } }, 0] },
+          { $gte: [
+            { $convert: { input: '$chap', to: 'double', onError: 0, onNull: 0 } },
+            { $toDouble: { $ifNull: ['$totalChaps', 0] } }
+          ]}
+        ]
+      };
+    } else if (progress === 'incomplete') {
+      // Chưa 100%: totalChaps = 0 hoặc chap đã đọc < totalChaps
+      query.$expr = {
+        $or: [
+          { $lte: [{ $toDouble: { $ifNull: ['$totalChaps', 0] } }, 0] },
+          { $lt: [
+            { $convert: { input: '$chap', to: 'double', onError: 0, onNull: 0 } },
+            { $toDouble: { $ifNull: ['$totalChaps', 0] } }
+          ]}
+        ]
+      };
     }
     
     // Xây dựng điều kiện sắp xếp
