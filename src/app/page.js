@@ -139,7 +139,8 @@ export default function Home() {
     url: '',
     coverUrl: '',
     rating: 0,
-    totalChaps: ''
+    totalChaps: '',
+    status: 'Reading'
   });
 
   // State cấu hình & phụ trợ
@@ -154,6 +155,19 @@ export default function Home() {
   const [filterProgress, setFilterProgress] = useState('all'); // 'all' | 'complete' | 'incomplete'
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const filterDropdownRef = useRef(null);
+
+  // State bộ lọc trạng thái truyện
+  const [filterStatus, setFilterStatus] = useState('Reading'); // 'all' | 'Reading' | 'Completed' | 'OnHold' | 'Dropped'
+  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef(null);
+
+  // Danh sách trạng thái truyện
+  const storyStatuses = [
+    { value: 'Reading', label: 'Đang đọc', color: '#6366f1' },
+    { value: 'Completed', label: 'Hoàn thành', color: '#10b981' },
+    { value: 'OnHold', label: 'Tạm dừng', color: '#f59e0b' },
+    { value: 'Dropped', label: 'Bỏ đọc', color: '#ef4444' }
+  ];
 
   // State theo dõi các phần tử đang được chỉnh sửa nhanh số chap
   const [editingChapId, setEditingChapId] = useState(null);
@@ -347,12 +361,12 @@ export default function Home() {
   // Load danh sách truyện khi bộ lọc hoặc số trang thay đổi
   useEffect(() => {
     fetchStories();
-  }, [page, debouncedSearchQuery, sortBy, filterProgress]);
+  }, [page, debouncedSearchQuery, sortBy, filterProgress, filterStatus]);
 
-  // Reset về trang 1 khi bộ lọc tiến độ thay đổi
+  // Reset về trang 1 khi bộ lọc tiến độ hoặc trạng thái thay đổi
   useEffect(() => {
     setPage(1);
-  }, [filterProgress]);
+  }, [filterProgress, filterStatus]);
 
   // Load theme
   useEffect(() => {
@@ -369,6 +383,9 @@ export default function Home() {
       }
       if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
         setIsFilterDropdownOpen(false);
+      }
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target)) {
+        setIsStatusDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -457,7 +474,7 @@ export default function Home() {
 
   // Gọi API lấy danh sách truyện (có phân trang)
   const fetchStories = async () => {
-    const cacheKey = `${page}_${debouncedSearchQuery}_${sortBy}_${filterProgress}`;
+    const cacheKey = `${page}_${debouncedSearchQuery}_${sortBy}_${filterProgress}_${filterStatus}`;
 
     // Kiểm tra cache trên client trước để phản hồi tức thì
     if (searchCache.current.has(cacheKey)) {
@@ -470,7 +487,9 @@ export default function Home() {
 
     setLoading(true);
     try {
-      const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}&progress=${filterProgress}`);
+      const activeStatus = debouncedSearchQuery ? '' : (filterStatus === 'all' ? '' : filterStatus);
+      const activeProgress = debouncedSearchQuery ? 'all' : filterProgress;
+      const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}&progress=${activeProgress}&status=${activeStatus}`);
       const data = await res.json();
       if (data.success) {
         setStories(data.data);
@@ -501,11 +520,13 @@ export default function Home() {
   // Tải trước dữ liệu của trang khác khi di chuột vào nút phân trang (Hover Prefetching)
   const prefetchPage = async (p) => {
     if (p < 1 || p > totalPages) return;
-    const cacheKey = `${p}_${debouncedSearchQuery}_${sortBy}_${filterProgress}`;
+    const cacheKey = `${p}_${debouncedSearchQuery}_${sortBy}_${filterProgress}_${filterStatus}`;
     if (searchCache.current.has(cacheKey)) return;
 
     try {
-      const res = await fetch(`/api/stories?page=${p}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}&progress=${filterProgress}`);
+      const activeStatus = debouncedSearchQuery ? '' : (filterStatus === 'all' ? '' : filterStatus);
+      const activeProgress = debouncedSearchQuery ? 'all' : filterProgress;
+      const res = await fetch(`/api/stories?page=${p}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}&progress=${activeProgress}&status=${activeStatus}`);
       const data = await res.json();
       if (data.success && data.pagination) {
         searchCache.current.set(cacheKey, {
@@ -565,11 +586,11 @@ export default function Home() {
           body: JSON.stringify({
             title: formData.title,
             chap: formData.chap,
-            url: cleanUrl, // Sử dụng url tương đối đã chuẩn hóa
-            coverUrl: cleanCoverUrl, // Sử dụng coverUrl đã chuẩn hóa
+            url: cleanUrl,
+            coverUrl: cleanCoverUrl,
             rating: formData.rating,
             totalChaps: formData.totalChaps,
-            status: 'Reading'
+            status: formData.status || 'Reading'
           })
         });
       } else {
@@ -579,10 +600,11 @@ export default function Home() {
           body: JSON.stringify({
             title: formData.title,
             chap: formData.chap,
-            url: cleanUrl, // Sử dụng url tương đối đã chuẩn hóa
-            coverUrl: cleanCoverUrl, // Sử dụng coverUrl đã chuẩn hóa
+            url: cleanUrl,
+            coverUrl: cleanCoverUrl,
             rating: formData.rating,
-            totalChaps: formData.totalChaps
+            totalChaps: formData.totalChaps,
+            status: formData.status || 'Reading'
           })
         });
       }
@@ -834,7 +856,8 @@ export default function Home() {
       url: story.url || '',
       coverUrl: story.coverUrl || '',
       rating: story.rating || 0,
-      totalChaps: story.totalChaps ? story.totalChaps.toString() : ''
+      totalChaps: story.totalChaps ? story.totalChaps.toString() : '',
+      status: story.status || 'Reading'
     });
     setIsModalOpen(true);
   };
@@ -846,7 +869,8 @@ export default function Home() {
       url: '',
       coverUrl: '',
       rating: 0,
-      totalChaps: ''
+      totalChaps: '',
+      status: 'Reading'
     });
     setSelectedStory(null);
   };
@@ -996,6 +1020,50 @@ export default function Home() {
               </div>
             )}
           </div>
+
+          {/* Dropdown bộ lọc trạng thái truyện */}
+          <div className="custom-select-wrapper" ref={statusDropdownRef}>
+            <button
+              type="button"
+              className={`custom-select-trigger ${filterStatus !== 'all' ? 'filter-active' : ''}`}
+              onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
+            >
+              <span>
+                {filterStatus === 'all' && 'Trạng thái: Tất cả'}
+                {filterStatus !== 'all' && (storyStatuses.find(s => s.value === filterStatus)?.label || filterStatus)}
+              </span>
+              <ChevronDown size={16} className={`arrow-icon ${isStatusDropdownOpen ? 'open' : ''}`} />
+            </button>
+            {isStatusDropdownOpen && (
+              <div className="custom-select-options">
+                <div
+                  className={`custom-select-option ${filterStatus === 'all' ? 'selected' : ''}`}
+                  onClick={() => {
+                    setFilterStatus('all');
+                    setIsStatusDropdownOpen(false);
+                    searchCache.current.clear();
+                  }}
+                >
+                  Trạng thái: Tất cả
+                </div>
+                {storyStatuses.map(st => (
+                  <div
+                    key={st.value}
+                    className={`custom-select-option ${filterStatus === st.value ? 'selected' : ''}`}
+                    onClick={() => {
+                      setFilterStatus(st.value);
+                      setIsStatusDropdownOpen(false);
+                      searchCache.current.clear();
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                  >
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: st.color, display: 'inline-block', flexShrink: 0 }} />
+                    {st.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
 
@@ -1063,20 +1131,46 @@ export default function Home() {
 
                     </div>
                     <div className="card-details">
-                      <h4 className="card-title-v2" title={story.title}>{story.title}</h4>
+                      <h4 className="card-title-v2" title={story.title} style={{
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden'
+                      }}>{story.title}</h4>
 
-                      {/* Đánh giá số sao */}
-                      <div className="card-rating-stars" title={`Đánh giá: ${story.rating || 0}/5 sao`} style={{ display: 'flex', gap: '2px', margin: '4px 0' }}>
-                        {Array.from({ length: 5 }).map((_, idx) => (
-                          <Star
-                            key={idx}
-                            size={13}
-                            style={{
-                              fill: idx < (story.rating || 0) ? '#fbbf24' : 'none',
-                              color: idx < (story.rating || 0) ? '#fbbf24' : 'var(--border-color)',
-                            }}
-                          />
-                        ))}
+                      {/* Hàng: Sao đánh giá + Badge trạng thái */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0', flexWrap: 'wrap' }}>
+                        <div className="card-rating-stars" title={`Đánh giá: ${story.rating || 0}/5 sao`} style={{ display: 'flex', gap: '2px' }}>
+                          {Array.from({ length: 5 }).map((_, idx) => (
+                            <Star
+                              key={idx}
+                              size={13}
+                              style={{
+                                fill: idx < (story.rating || 0) ? '#fbbf24' : 'none',
+                                color: idx < (story.rating || 0) ? '#fbbf24' : 'var(--border-color)',
+                              }}
+                            />
+                          ))}
+                        </div>
+                        {(() => {
+                          const st = storyStatuses.find(s => s.value === (story.status || 'Reading'));
+                          return (
+                            <span style={{
+                              display: 'inline-block',
+                              fontSize: '10px',
+                              fontWeight: '700',
+                              padding: '1px 7px',
+                              borderRadius: '20px',
+                              backgroundColor: st ? st.color + '22' : '#6366f122',
+                              color: st ? st.color : '#6366f1',
+                              border: `1px solid ${st ? st.color + '55' : '#6366f155'}`,
+                              letterSpacing: '0.3px',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {st ? st.label : 'Đang đọc'}
+                            </span>
+                          );
+                        })()}
                       </div>
 
                       {/* Thanh tiến độ đọc */}
@@ -1467,6 +1561,32 @@ export default function Home() {
                   <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)' }}>
                     {formData.rating > 0 ? `${formData.rating}/5 sao` : 'Chưa đánh giá'}
                   </span>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Trạng Thái Truyện</label>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
+                  {storyStatuses.map(st => (
+                    <button
+                      key={st.value}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, status: st.value })}
+                      style={{
+                        padding: '6px 14px',
+                        borderRadius: '20px',
+                        border: `1.5px solid ${st.color}`,
+                        backgroundColor: formData.status === st.value ? st.color : 'transparent',
+                        color: formData.status === st.value ? '#fff' : st.color,
+                        fontWeight: '700',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease'
+                      }}
+                    >
+                      {st.label}
+                    </button>
+                  ))}
                 </div>
               </div>
 
