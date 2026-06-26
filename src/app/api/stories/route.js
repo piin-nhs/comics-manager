@@ -33,28 +33,36 @@ export async function GET(request) {
       sortQuery = { updatedAt: -1 };
     }
     
-    const stories = await db.collection('stories').find(query).sort(sortQuery).toArray();
+    // Tính tổng số chương đã đọc một cách tối ưu (chỉ fetch trường 'chap' để giảm tải RAM)
+    const allChaps = await db.collection('stories').find(query, { projection: { chap: 1 } }).toArray();
+    const totalChapsRead = allChaps.reduce((sum, s) => {
+      const val = parseFloat(s.chap);
+      return sum + (isNaN(val) ? 0 : val);
+    }, 0);
+    const totalCount = allChaps.length;
+    const totalPages = Math.ceil(totalCount / limit);
+    const startIndex = (page - 1) * limit;
+
+    let paginatedStories;
     
-    // Nếu sort là 'chap_desc', ta thực hiện sort bằng javascript trên RAM để xử lý việc so sánh số có dấu phẩy (như 10.5) một cách chuẩn xác hơn
+    // Nếu sort là 'chap_desc', ta vẫn phải thực hiện sort trên RAM vì chap là dạng string
     if (sort === 'chap_desc') {
-      stories.sort((a, b) => {
+      const allStories = await db.collection('stories').find(query).sort(sortQuery).toArray();
+      allStories.sort((a, b) => {
         const numA = parseFloat((a.chap || '').replace(/[^0-9.]/g, '')) || 0;
         const numB = parseFloat((b.chap || '').replace(/[^0-9.]/g, '')) || 0;
         return numB - numA;
       });
+      paginatedStories = allStories.slice(startIndex, startIndex + limit);
+    } else {
+      // Với các kiểu sort khác, ta phân trang trực tiếp trong MongoDB sử dụng index cực nhanh
+      paginatedStories = await db.collection('stories')
+        .find(query)
+        .sort(sortQuery)
+        .skip(startIndex)
+        .limit(limit)
+        .toArray();
     }
-    
-    // Tính tổng số chương đã đọc của tất cả truyện (không phân trang)
-    const totalChapsRead = stories.reduce((sum, s) => {
-      const val = parseFloat(s.chap);
-      return sum + (isNaN(val) ? 0 : val);
-    }, 0);
-
-    // Phân trang bằng javascript
-    const totalCount = stories.length;
-    const totalPages = Math.ceil(totalCount / limit);
-    const startIndex = (page - 1) * limit;
-    const paginatedStories = stories.slice(startIndex, startIndex + limit);
     
     return NextResponse.json({ 
       success: true, 

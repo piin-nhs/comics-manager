@@ -14,6 +14,11 @@ const getMainPageUrl = (url) => {
   return url;
 };
 
+// Cache lưu tổng số chương của truyện (key: mainPageUrl, value: { totalChaps: number, timestamp: number })
+// Tránh spam quét nhiều lần vào các trang truyện, tăng tốc tải trang
+const scrapeCache = new Map();
+const CACHE_TTL = 30 * 60 * 1000; // 30 phút cache
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -25,6 +30,18 @@ export async function GET(request) {
     const mainPageUrl = getMainPageUrl(url);
     if (!mainPageUrl) {
       return NextResponse.json({ success: false, error: 'Invalid URL' }, { status: 400 });
+    }
+
+    // Kiểm tra cache trước
+    const now = Date.now();
+    const cached = scrapeCache.get(mainPageUrl);
+    if (cached && (now - cached.timestamp < CACHE_TTL)) {
+      return NextResponse.json({
+        success: true,
+        totalChaps: cached.totalChaps,
+        mainPageUrl,
+        fromCache: true
+      });
     }
 
     const controller = new AbortController();
@@ -101,6 +118,9 @@ export async function GET(request) {
 
     // Lấy số chương lớn nhất làm tổng số chương
     const maxChap = Math.max(...chaps);
+
+    // Lưu kết quả vào cache
+    scrapeCache.set(mainPageUrl, { totalChaps: maxChap, timestamp: Date.now() });
 
     return NextResponse.json({
       success: true,

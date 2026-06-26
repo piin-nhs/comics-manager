@@ -56,6 +56,7 @@ export default function Home() {
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState('updatedAt_desc');
 
   // State phân trang
@@ -180,15 +181,23 @@ export default function Home() {
     });
   }, [stories]);
 
+  // Debounce tìm kiếm để tránh gửi request liên tục làm lag và spam server
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 350); // Đợi 350ms sau khi ngừng gõ mới cập nhật query tìm kiếm
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  // Reset về trang 1 khi query tìm kiếm thực tế thay đổi
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearchQuery]);
+
   // Load danh sách truyện khi bộ lọc hoặc số trang thay đổi
   useEffect(() => {
     fetchStories();
-  }, [page, searchQuery, sortBy]);
-
-  // Reset về trang 1 khi người dùng gõ tìm kiếm
-  useEffect(() => {
-    setPage(1);
-  }, [searchQuery]);
+  }, [page, debouncedSearchQuery, sortBy]);
 
   // Load theme
   useEffect(() => {
@@ -234,7 +243,7 @@ export default function Home() {
   const fetchStories = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(searchQuery)}&sort=${sortBy}`);
+      const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}`);
       const data = await res.json();
       if (data.success) {
         setStories(data.data);
