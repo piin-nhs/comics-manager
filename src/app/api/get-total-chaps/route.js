@@ -27,26 +27,22 @@ const getRelativeStoryPath = (url) => {
   return path.replace(/^\/|\/$/g, '');
 };
 
-// Hàm trích xuất đường dẫn tương đối của ảnh bìa truyện
+// Hàm trích xuất đường dẫn ảnh bìa truyện
+// - URL tuyệt đối (http/https): giữ nguyên để không mất domain gốc
+// - URL tương đối (/path/...): loại bỏ dấu gạch chéo đầu/cuối
 const getRelativeCoverPath = (url) => {
   if (!url) return '';
-  let path = url.trim();
-  
+  const path = url.trim();
+
+  // Nếu là URL tuyệt đối (kể cả ảnh từ CDN ngoài), giữ nguyên toàn bộ
   if (path.startsWith('http://') || path.startsWith('https://')) {
-    try {
-      const parsed = new URL(path);
-      const externalHosts = ['imgur.com', 'blogspot.com', 'googleusercontent.com', 'ggpht.com', 'cloudinary.com', 'wp.com'];
-      const isExternal = externalHosts.some(host => parsed.hostname.includes(host));
-      if (!isExternal) {
-        path = parsed.pathname + parsed.search; // Giữ nguyên phần query params (ví dụ: ?code=gtt-yes)
-      }
-    } catch (e) {
-      console.error("Error parsing cover URL:", e);
-    }
+    return path;
   }
-  
-  return path.startsWith('http://') || path.startsWith('https://') ? path : path.replace(/^\/|\/$/g, '');
+
+  // Đường dẫn tương đối: bỏ dấu / đầu và cuối
+  return path.replace(/^\/|\/$/g, '');
 };
+
 
 // Hàm quét ảnh bìa từ nội dung HTML của trang truyện chính
 const getCoverFromHtml = (html, title) => {
@@ -112,7 +108,19 @@ export async function GET(request) {
       return NextResponse.json({ success: false, error: 'Invalid URL/Path' }, { status: 400 });
     }
 
-    const resolvedUrl = `${cleanDomain}/${relativePath}`;
+    // Nếu URL gốc đã là URL đầy đủ → extract domain từ đó, không dùng domain chung
+    let resolvedUrl;
+    const trimmedUrl = url.trim();
+    if (trimmedUrl.startsWith('http://') || trimmedUrl.startsWith('https://')) {
+      try {
+        const parsed = new URL(trimmedUrl);
+        resolvedUrl = `${parsed.protocol}//${parsed.host}/${relativePath}`;
+      } catch {
+        resolvedUrl = `${cleanDomain}/${relativePath}`;
+      }
+    } else {
+      resolvedUrl = `${cleanDomain}/${relativePath}`;
+    }
 
     // Kiểm tra cache trước
     const now = Date.now();

@@ -11,7 +11,7 @@ let client;
 let clientPromise;
 
 // Sử dụng biến global để cache kết nối MongoClient ở cả Dev và Production.
-// Điều này cực kỳ quan trọng trên Vercel (Serverless) để tái sử dụng connection pool,
+// Điều này cực kỳ quan trọ ng trên Vercel (Serverless) để tái sử dụng connection pool,
 // tránh tạo mới kết nối liên tục gây trễ (Handshake/SSL) và cạn kiệt số lượng connection.
 if (!global._mongoClientPromise) {
   client = new MongoClient(uri, options);
@@ -19,23 +19,29 @@ if (!global._mongoClientPromise) {
 }
 clientPromise = global._mongoClientPromise;
 
-// Export kết nối MongoClient
 export default clientPromise;
 
-// Helper function để lấy nhanh đối tượng DB
+// Tạo indexes một lần duy nhất trong vòng đời của process (không chạy lại ở mỗi request)
+async function ensureIndexes(db) {
+  const col = db.collection('stories');
+  await Promise.all([
+    col.createIndex({ title: 1 }),
+    col.createIndex({ updatedAt: -1 }),
+    col.createIndex({ status: 1 }),
+    col.createIndex({ status: 1, updatedAt: -1 }),  // compound: lọ của lấy theo status + sort thời gian
+    col.createIndex({ totalChaps: 1 }),
+  ]);
+}
+
 export async function getDb() {
   const client = await clientPromise;
   const db = client.db(process.env.MONGODB_DB || 'comics_db');
-  
-  // Tạo các index để tối ưu hóa tìm kiếm, sắp xếp và lọc trong MongoDB
-  // createIndex là idempotent (chỉ tạo nếu chưa tồn tại)
-  try {
-    db.collection('stories').createIndex({ title: 1 });
-    db.collection('stories').createIndex({ updatedAt: -1 });
-    db.collection('stories').createIndex({ status: 1 });
-  } catch (err) {
-    console.error('Lỗi tạo index MongoDB:', err);
+
+  // Chỉ tạo indexes một lần/process — không block request, chạy nền
+  if (!global._mongoIndexesEnsured) {
+    global._mongoIndexesEnsured = true;
+    ensureIndexes(db).catch(err => console.error('Index creation error:', err));
   }
-  
+
   return db;
 }

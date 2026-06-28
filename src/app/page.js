@@ -82,27 +82,45 @@ const getRelativeStoryPath = (url) => {
   return path.replace(/^\/|\/$/g, '');
 };
 
-// Hàm trích xuất đường dẫn tương đối của ảnh bìa truyện
+// Hàm trích xuất đường dẫn ảnh bìa truyện
+// - URL tuyệt đối: giữ nguyên toàn bộ
+// - URL tương đối (/path/...): loại bỏ dấu gạch chéo đầu/cuối
 const getRelativeCoverPath = (url) => {
   if (!url) return '';
-  let path = url.trim();
+  const path = url.trim();
 
   if (path.startsWith('http://') || path.startsWith('https://')) {
-    try {
-      const parsed = new URL(path);
-      // Nếu là ảnh từ các host up ảnh ngoài (như imgur, blogspot, google...), giữ nguyên link tuyệt đối
-      const externalHosts = ['imgur.com', 'blogspot.com', 'googleusercontent.com', 'ggpht.com', 'cloudinary.com', 'wp.com'];
-      const isExternal = externalHosts.some(host => parsed.hostname.includes(host));
-      if (!isExternal) {
-        path = parsed.pathname + parsed.search; // Giữ nguyên phần query params (ví dụ: ?code=gtt-yes)
-      }
-    } catch (e) {
-      console.error("Error parsing cover URL:", e);
-    }
+    return path;
   }
 
-  // Loại bỏ dấu gạch chéo đầu và cuối nếu là đường dẫn tương đối
-  return path.startsWith('http://') || path.startsWith('https://') ? path : path.replace(/^\/|\/$/g, '');
+  return path.replace(/^\/|\/$/g, '');
+};
+
+
+// Cấu hình theo từng domain: prefix chương khi tạo URL đọc
+const DOMAIN_CONFIGS = {
+  'truyenqq.com.vn': { chapPrefix: 'chapter-' },
+  'truyenqq.net': { chapPrefix: 'chapter-' },
+  'goctruyentranhvui30.com': { chapPrefix: 'chuong-' },
+  // Thêm domain khác tại đây nếu cần
+};
+
+// Lấy config của domain từ URL hoặc hostname
+const getDomainConfig = (domainOrUrl) => {
+  if (!domainOrUrl) return null;
+  try {
+    let hostname = domainOrUrl;
+    if (domainOrUrl.startsWith('http://') || domainOrUrl.startsWith('https://')) {
+      hostname = new URL(domainOrUrl).hostname;
+    }
+    // Khớp chính xác hoặc subdomain (www.truyenqq.com.vn → truyenqq.com.vn)
+    const key = Object.keys(DOMAIN_CONFIGS).find(k =>
+      hostname === k || hostname.endsWith('.' + k)
+    );
+    return key ? DOMAIN_CONFIGS[key] : null;
+  } catch {
+    return null;
+  }
 };
 
 export default function Home() {
@@ -152,7 +170,7 @@ export default function Home() {
   const sortDropdownRef = useRef(null);
 
   // State bộ lọc tiến độ đọc
-  const [filterProgress, setFilterProgress] = useState('all'); // 'all' | 'complete' | 'incomplete'
+  const [filterProgress, setFilterProgress] = useState('incomplete'); // 'all' | 'complete' | 'incomplete'
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const filterDropdownRef = useRef(null);
 
@@ -186,27 +204,61 @@ export default function Home() {
   const sortOptions = [
     { value: 'updatedAt_desc', label: 'Mới cập nhật' },
     { value: 'updatedAt_asc', label: 'Cũ cập nhật' },
-    { value: 'title_asc', label: 'Tên truyện A - Z' },
-    { value: 'title_desc', label: 'Tên truyện Z - A' },
-    { value: 'chap_desc', label: 'Số chap lớn nhất' }
+    { value: 'unread_asc', label: 'Chưa đọc ít nhất' },
+    { value: 'unread_desc', label: 'Chưa đọc nhiều nhất' },
+    { value: 'chap_asc', label: 'Số chap nhỏ nhất' },
+    { value: 'chap_desc', label: 'Số chap lớn nhất' },
+    { value: 'title_asc', label: 'Tên A → Z' },
+    { value: 'title_desc', label: 'Tên Z → A' }
   ];
 
   const currentSortOption = sortOptions.find(o => o.value === sortBy) || sortOptions[0];
 
 
 
+  // Chuẩn hóa URL truyện trước khi lưu:
+  // - URL thuộc domain chung → strip về relative path (hành vi cũ, tương thích dữ liệu hiện tại)
+  // - URL thuộc domain khác → giữ nguyên full URL để detect domain đúng
+  const normalizeStoryUrl = (rawUrl, globalDomain) => {
+    if (!rawUrl) return '';
+    // Bỏ phần chapter ở cuối (ví dụ: .../chapter-315 → ...)
+    const withoutChap = rawUrl
+      .replace(/\/(chuong|chap|chapter|c|vol|tập|tap|episode|ep)[-_]*[\d.]+\/*$/i, '')
+      .replace(/\/+$/, '');
+
+    if (withoutChap.startsWith('http://') || withoutChap.startsWith('https://')) {
+      try {
+        const parsed = new URL(withoutChap);
+        const urlDomain = `${parsed.protocol}//${parsed.host}`;
+        // Nếu cùng domain chung → lưu relative (bỏ domain)
+        if (urlDomain === globalDomain) {
+          return parsed.pathname.replace(/^\/|\/$/g, '');
+        }
+        // Domain khác → giữ full URL
+        return withoutChap;
+      } catch {
+        return withoutChap;
+      }
+    }
+    // Đã là relative path → giữ nguyên
+    return withoutChap;
+  };
+
   // Tự động quét tổng số chap từ link web chính
   const autoDetectTotalChaps = async (urlToScan) => {
     const url = urlToScan || formData.url;
+
     if (!url) {
       showToast('Vui lòng dán link đọc để tự động quét số chap', 'info');
       return;
     }
 
-    // Tự động rút gọn và đưa về relative path trong input
-    const relativePath = getRelativeStoryPath(url);
-    if (relativePath && relativePath !== formData.url) {
-      setFormData(prev => ({ ...prev, url: relativePath }));
+    // Chuẩn hóa URL theo domain:
+    // - Nếu thuộc domain chung (goctruyentranhvui30.com) → lưu relative path (hành vi cũ)
+    // - Nếu domain khác (truyenqq...) → giữ full URL
+    const normalizedUrl = normalizeStoryUrl(url.trim(), getComicDomain());
+    if (normalizedUrl && normalizedUrl !== formData.url) {
+      setFormData(prev => ({ ...prev, url: normalizedUrl }));
     }
 
     showToast('Đang quét tự động tổng số chap & ảnh bìa...', 'info');
@@ -548,9 +600,11 @@ export default function Home() {
       return;
     }
 
-    // Đảm bảo URL được lưu ở dạng đường dẫn tương đối (e.g. truyen/tuyet-the-quan-lam)
-    const cleanUrl = getRelativeStoryPath(formData.url);
-    // Đảm bảo đường dẫn ảnh bìa được làm sạch (lưu tương đối đối với ảnh cùng host)
+    // Chuẩn hóa URL theo domain:
+    // - Domain chung (goctruyentranhvui30.com) → lưu relative path (hành vi cũ)
+    // - Domain khác → giữ full URL
+    const cleanUrl = normalizeStoryUrl(formData.url.trim(), getComicDomain());
+    // Đảm bảo đường dẫn ảnh bìa được làm sạch
     const cleanCoverUrl = getRelativeCoverPath(formData.coverUrl);
 
     // Kiểm tra trùng lặp link trước khi lưu để cảnh báo
@@ -789,45 +843,66 @@ export default function Home() {
     return url;
   };
 
+  // Trả về domain chung (fallback)
   const getComicDomain = () => {
     return (comicDomain || 'https://goctruyentranhvui30.com').replace(/\/$/, '');
   };
 
+  // Lấy domain cho một truyện cụ thể:
+  // Ưu tiên extract từ URL đầy đủ của truyện, fallback về domain chung
+  const getStoryDomain = (story) => {
+    const url = story?.url?.trim();
+    if (url && (url.startsWith('http://') || url.startsWith('https://'))) {
+      try {
+        const parsed = new URL(url);
+        return `${parsed.protocol}//${parsed.host}`;
+      } catch { }
+    }
+    return getComicDomain();
+  };
+
+  // Lấy prefix chương phù hợp với domain của truyện (chuong- hoặc chapter-)
+  const getChapPrefix = (story) => {
+    const storyDomain = getStoryDomain(story);
+    const config = getDomainConfig(storyDomain);
+    return config?.chapPrefix ?? 'chuong-';
+  };
+
   // Sinh URL tuyệt đối đầy đủ cho ảnh bìa
-  const getFullCoverUrl = (url) => {
+  const getFullCoverUrl = (url, story) => {
     if (!url) return '';
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url;
     }
     const cleanPath = url.replace(/^\/|\/$/g, '');
-    return `${getComicDomain()}/${cleanPath}`;
+    return `${getStoryDomain(story)}/${cleanPath}`;
   };
 
   // Sinh URL cho chương hiện tại
-  const getCurrentChapUrl = (url, currentChap) => {
+  const getCurrentChapUrl = (url, currentChap, story) => {
     if (!url) return '';
     const num = parseFloat(currentChap);
     const currentChapStr = isNaN(num) ? currentChap : num.toString();
-
-    // Rút gọn thành relative path để ghép với domain mới cấu hình
     const relativePath = getRelativeStoryPath(url);
-    return `${getComicDomain()}/${relativePath}/chuong-${currentChapStr}`;
+    const domain = getStoryDomain(story);
+    const prefix = getChapPrefix(story);
+    return `${domain}/${relativePath}/${prefix}${currentChapStr}`;
   };
 
   // Sinh URL cho chương tiếp theo
-  const getNextChapUrl = (url, currentChap) => {
+  const getNextChapUrl = (url, currentChap, story) => {
     if (!url) return '';
     const num = parseFloat(currentChap);
     const nextChap = isNaN(num) ? currentChap : (num + 1).toString();
-
-    // Rút gọn thành relative path để ghép với domain mới cấu hình
     const relativePath = getRelativeStoryPath(url);
-    return `${getComicDomain()}/${relativePath}/chuong-${nextChap}`;
+    const domain = getStoryDomain(story);
+    const prefix = getChapPrefix(story);
+    return `${domain}/${relativePath}/${prefix}${nextChap}`;
   };
 
   // Sao chép link chương tiếp theo
   const handleCopyLink = (story) => {
-    const nextUrl = getNextChapUrl(story.url, story.chap);
+    const nextUrl = getNextChapUrl(story.url, story.chap, story);
     if (!nextUrl) {
       showToast('Truyện này chưa gắn link đọc', 'info');
       return;
@@ -896,7 +971,18 @@ export default function Home() {
 
       {/* Header chính */}
       <header className="header-wrapper">
-        <h1 className="brand-title">
+        <h1
+          className="brand-title"
+          onClick={() => {
+            setSearchQuery('');
+            setFilterProgress('incomplete');
+            setSortBy('updatedAt_desc');
+            setPage(1);
+            searchCache.current.clear();
+          }}
+          style={{ cursor: 'pointer' }}
+          title="Click để về trang chủ"
+        >
           <BookOpen size={30} style={{ color: 'var(--primary-color)' }} />
           <span>Quản lý Truyện Đã Đọc</span>
         </h1>
@@ -1100,8 +1186,8 @@ export default function Home() {
         <>
           <div className="comics-grid">
             {stories.map((story) => {
-              const currentUrl = getCurrentChapUrl(story.url, story.chap);
-              const nextUrl = getNextChapUrl(story.url, story.chap);
+              const currentUrl = getCurrentChapUrl(story.url, story.chap, story);
+              const nextUrl = getNextChapUrl(story.url, story.chap, story);
               const nextChapNum = (parseFloat(story.chap) + 1) || '';
               const currentChapNum = parseFloat(story.chap) || 0;
               const totalChapNum = parseFloat(story.totalChaps) || 0;
@@ -1117,10 +1203,10 @@ export default function Home() {
                     <div className="card-thumb-wrapper" style={{ position: 'relative', flexShrink: 0 }}>
                       {story.coverUrl ? (
                         <img
-                          src={getFullCoverUrl(story.coverUrl)}
+                          src={getFullCoverUrl(story.coverUrl, story)}
                           alt={story.title}
                           className="card-thumb"
-                          onClick={() => window.open(getFullCoverUrl(story.coverUrl), '_blank')}
+                          onClick={() => window.open(getFullCoverUrl(story.coverUrl, story), '_blank')}
                           title="Click để phóng to ảnh bìa"
                         />
                       ) : (
@@ -1485,7 +1571,7 @@ export default function Home() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="Dán link hoặc nhập đường dẫn tương đối (ví dụ: truyen/tuyet-the-quan-lam)..."
+                  placeholder="Dán link đầy đủ (ví dụ: https://truyenqq.com.vn/ten-truyen) hoặc đường dẫn tương đối..."
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                   onBlur={(e) => {
@@ -1494,7 +1580,9 @@ export default function Home() {
                     }
                   }}
                 />
+
               </div>
+
 
               <div className="form-group">
                 <label className="form-label">Đường Dẫn / Link Ảnh Bìa</label>
