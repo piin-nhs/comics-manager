@@ -8,24 +8,22 @@ export async function GET(request) {
     const search = searchParams.get('search') || '';
     const status = searchParams.get('status') || '';
     const sort = searchParams.get('sort') || 'updatedAt_desc';
-    const progress = searchParams.get('progress') || 'all'; // 'all' | 'complete' | 'incomplete'
+    const progress = searchParams.get('progress') || 'all';
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
-    
+
     const db = await getDb();
-    
-    // Xây dựng điều kiện tìm kiếm
-    const query = {};
+
+    // Xây dựng điều kiện lọc ($match)
+    const matchQuery = {};
     if (search) {
-      query.title = { $regex: search, $options: 'i' };
+      matchQuery.title = { $regex: search, $options: 'i' };
     }
     if (status) {
-      query.status = status;
+      matchQuery.status = status;
     }
-    // Lọc theo tiến độ đọc: so sánh chap đã đọc với tổng số chap
     if (progress === 'complete') {
-      // Đọc 100%: totalChaps > 0 và chap (đã parse sang số) >= totalChaps
-      query.$expr = {
+      matchQuery.$expr = {
         $and: [
           { $gt: [{ $toDouble: { $ifNull: ['$totalChaps', 0] } }, 0] },
           { $gte: [
@@ -35,8 +33,7 @@ export async function GET(request) {
         ]
       };
     } else if (progress === 'incomplete') {
-      // Chưa 100%: totalChaps = 0 hoặc chap đã đọc < totalChaps
-      query.$expr = {
+      matchQuery.$expr = {
         $or: [
           { $lte: [{ $toDouble: { $ifNull: ['$totalChaps', 0] } }, 0] },
           { $lt: [
@@ -46,45 +43,65 @@ export async function GET(request) {
         ]
       };
     }
-    
-    // Xây dựng điều kiện sắp xếp
-    let sortQuery = { updatedAt: -1 };
-    if (sort === 'title_asc') sortQuery = { title: 1 };
-    else if (sort === 'title_desc') sortQuery = { title: -1 };
-    else if (sort === 'updatedAt_asc') sortQuery = { updatedAt: 1 };
-    else if (sort === 'updatedAt_desc') sortQuery = { updatedAt: -1 };
-    else if (sort === 'chap_desc') {
-      // Vì chap có thể chứa ký tự, ta lấy sắp xếp theo chiều giảm dần của ngày cập nhật làm phụ trợ
-      sortQuery = { updatedAt: -1 };
-    }
-    
-    const totalCount = await db.collection('stories').countDocuments(query);
-    const totalPages = Math.ceil(totalCount / limit);
+
     const startIndex = (page - 1) * limit;
 
-    let paginatedStories;
-    
-    // Nếu sort là 'chap_desc', ta vẫn phải thực hiện sort trên RAM vì chap là dạng string
-    if (sort === 'chap_desc') {
-      const allStories = await db.collection('stories').find(query).sort(sortQuery).toArray();
-      allStories.sort((a, b) => {
-        const numA = parseFloat((a.chap || '').replace(/[^0-9.]/g, '')) || 0;
-        const numB = parseFloat((b.chap || '').replace(/[^0-9.]/g, '')) || 0;
-        return numB - numA;
-      });
-      paginatedStories = allStories.slice(startIndex, startIndex + limit);
+    // Xây dựng pipeline aggregation — tất cả trong 1 round trip MongoDB
+    const pipeline = [{ $match: matchQuery }];
+
+    // Thêm bước tính toán và sắp xếp theo loại sort
+    if (sort === 'chap_asc' || sort === 'chap_desc') {
+      pipeline.push({ $addFields: {
+        _chapNum: { $convert: { input: '$chap', to: 'double', onError: 0, onNull: 0 } }
+      }});
+      pipeline.push({ $sort: { _chapNum: sort === 'chap_asc' ? 1 : -1, updatedAt: -1 } });
+
+    } else if (sort === 'unread_asc' || sort === 'unread_desc') {
+      const noTotalFallback = sort === 'unread_asc' ? 999999 : -1;
+      pipeline.push({ $addFields: {
+        _chapNum:      { $convert: { input: '$chap', to: 'double', onError: 0, onNull: 0 } },
+        _totalChapNum: { $toDouble: { $ifNull: ['$totalChaps', 0] } }
+      }});
+      pipeline.push({ $addFields: {
+        _unreadCount: {
+          $cond: {
+            if:   { $gt: ['$_totalChapNum', 0] },
+            then: { $max: [{ $subtract: ['$_totalChapNum', '$_chapNum'] }, 0] },
+            else: noTotalFallback
+          }
+        }
+      }});
+      pipeline.push({ $sort: { _unreadCount: sort === 'unread_asc' ? 1 : -1, updatedAt: -1 } });
+
     } else {
-      // Với các kiểu sort khác, ta phân trang trực tiếp trong MongoDB sử dụng index cực nhanh
-      paginatedStories = await db.collection('stories')
-        .find(query)
-        .sort(sortQuery)
-        .skip(startIndex)
-        .limit(limit)
-        .toArray();
+      // Sort thông thường — dùng index MongoDB trực tiếp
+      const sortMap = {
+        title_asc:      { title: 1 },
+        title_desc:     { title: -1 },
+        updatedAt_asc:  { updatedAt: 1 },
+        updatedAt_desc: { updatedAt: -1 },
+      };
+      pipeline.push({ $sort: sortMap[sort] || { updatedAt: -1 } });
     }
-    
-    return NextResponse.json({ 
-      success: true, 
+
+    // $facet: gộp đếm tổng + lấy dữ liệu trang thành 1 query duy nhất (tiết kiệm 1 round trip)
+    pipeline.push({ $facet: {
+      data: [
+        { $skip: startIndex },
+        { $limit: limit },
+        // Loại bỏ các field tạm tính — không cần trả về client
+        { $project: { _chapNum: 0, _totalChapNum: 0, _unreadCount: 0 } }
+      ],
+      meta: [{ $count: 'total' }]
+    }});
+
+    const [result] = await db.collection('stories').aggregate(pipeline).toArray();
+    const paginatedStories = result?.data || [];
+    const totalCount = result?.meta?.[0]?.total || 0;
+    const totalPages = Math.ceil(totalCount / limit);
+
+    return NextResponse.json({
+      success: true,
       data: paginatedStories,
       pagination: {
         total: totalCount,
