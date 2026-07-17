@@ -142,10 +142,14 @@ export default function Home() {
   const [modalMode, setModalMode] = useState('add'); // 'add' hoặc 'edit'
   const [selectedStory, setSelectedStory] = useState(null);
 
-  // State cấu hình domain dùng chung
+  // State cấu hình domain dùng chung và Cloudflare
   const [comicDomain, setComicDomain] = useState('https://goctruyentranhvui30.com');
+  const [comicCookie, setComicCookie] = useState('');
+  const [comicUserAgent, setComicUserAgent] = useState('');
   const [isDomainModalOpen, setIsDomainModalOpen] = useState(false);
   const [tempDomain, setTempDomain] = useState('');
+  const [tempCookie, setTempCookie] = useState('');
+  const [tempUserAgent, setTempUserAgent] = useState('');
   const [saveDomainLoading, setSaveDomainLoading] = useState(false);
 
 
