@@ -248,158 +248,9 @@ export default function Home() {
     return withoutChap;
   };
 
-  // Tự động quét tổng số chap từ link web chính
-  const autoDetectTotalChaps = async (urlToScan) => {
-    const url = urlToScan || formData.url;
 
-    if (!url) {
-      showToast('Vui lòng dán link đọc để tự động quét số chap', 'info');
-      return;
-    }
 
-    // Chuẩn hóa URL theo domain:
-    // - Nếu thuộc domain chung (goctruyentranhvui30.com) → lưu relative path (hành vi cũ)
-    // - Nếu domain khác (truyenqq...) → giữ full URL
-    const normalizedUrl = normalizeStoryUrl(url.trim(), getComicDomain());
-    if (normalizedUrl && normalizedUrl !== formData.url) {
-      setFormData(prev => ({ ...prev, url: normalizedUrl }));
-    }
 
-    showToast('Đang quét tự động tổng số chap & ảnh bìa...', 'info');
-    try {
-      const titleParam = formData.title ? `&title=${encodeURIComponent(formData.title)}` : '';
-      const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(url)}${titleParam}`);
-      const data = await res.json();
-      if (data.success && data.totalChaps) {
-        setFormData(prev => {
-          const updates = { totalChaps: data.totalChaps.toString() };
-          // Nếu form hiện tại chưa có ảnh bìa, tự động điền ảnh bìa quét được
-          if (data.coverUrl && !prev.coverUrl) {
-            updates.coverUrl = data.coverUrl;
-          }
-          return { ...prev, ...updates };
-        });
-        showToast(`Quét thành công! Tìm thấy ${data.totalChaps} chap và ảnh bìa truyện.`, 'success');
-      } else {
-        showToast(data.error || 'Không tìm thấy thông tin trên trang này.', 'warning');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Lỗi quét thông tin truyện.', 'danger');
-    }
-  };
-
-  // Tự động quét và cập nhật riêng ảnh bìa từ link đọc
-  const autoDetectCoverUrl = async () => {
-    const url = formData.url;
-    if (!url) {
-      showToast('Vui lòng điền đường dẫn truyện hoặc dán link đọc để tự động quét ảnh bìa', 'info');
-      return;
-    }
-
-    showToast('Đang quét tự động ảnh bìa...', 'info');
-    try {
-      const titleParam = formData.title ? `&title=${encodeURIComponent(formData.title)}` : '';
-      const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(url)}${titleParam}`);
-      const data = await res.json();
-      if (data.success) {
-        if (data.coverUrl) {
-          setFormData(prev => ({ ...prev, coverUrl: data.coverUrl }));
-          showToast('Quét và cập nhật ảnh bìa thành công!', 'success');
-        } else {
-          showToast('Không tìm thấy ảnh bìa phù hợp trên trang này.', 'warning');
-        }
-      } else {
-        showToast(data.error || 'Lỗi quét thông tin trang.', 'warning');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Lỗi kết nối khi quét ảnh bìa.', 'danger');
-    }
-  };
-
-  // Quét tổng số chap trong nền cho từng truyện (chỉ chạy tối đa 1 lần mỗi 2 giờ để tránh lag và tốn tài nguyên)
-  const scanTotalChapsInBackground = async (story) => {
-    if (!story.url) return;
-
-    // Nếu mới quét trong vòng 2 giờ qua, bỏ qua không quét lại nữa
-    const lastScanned = story.lastScannedAt ? new Date(story.lastScannedAt).getTime() : 0;
-    const now = Date.now();
-    if (now - lastScanned < 2 * 60 * 60 * 1000) {
-      return;
-    }
-
-    try {
-      const res = await fetch(`/api/get-total-chaps?url=${encodeURIComponent(story.url)}&title=${encodeURIComponent(story.title)}`);
-      const data = await res.json();
-      if (data.success && data.totalChaps) {
-        const scannedTotal = data.totalChaps;
-
-        // Tạo body PATCH
-        const patchBody = {
-          lastScannedAt: new Date().toISOString()
-        };
-        if (scannedTotal !== story.totalChaps) {
-          patchBody.totalChaps = scannedTotal;
-        }
-
-        // Tự động bổ sung ảnh bìa nếu DB chưa có
-        if (data.coverUrl && !story.coverUrl) {
-          patchBody.coverUrl = data.coverUrl;
-        }
-
-        // Chỉ gửi patch nếu có thay đổi
-        if (patchBody.totalChaps !== undefined || patchBody.coverUrl !== undefined) {
-          const patchRes = await fetch(`/api/stories/${story._id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(patchBody)
-          });
-
-          const patchData = await patchRes.json();
-          if (patchData.success) {
-            // Xóa cache vì dữ liệu đã đổi
-            searchCache.current.clear();
-            // Cập nhật state cục bộ để giao diện tiến độ cập nhật ngay lập tức
-            setStories(prev => prev.map(s => s._id === story._id ? {
-              ...s,
-              totalChaps: scannedTotal,
-              coverUrl: patchBody.coverUrl !== undefined ? patchBody.coverUrl : s.coverUrl,
-              lastScannedAt: patchBody.lastScannedAt
-            } : s));
-          }
-        } else {
-          // Cập nhật thời gian đã quét để không lặp lại quét liên tục
-          await fetch(`/api/stories/${story._id}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lastScannedAt: patchBody.lastScannedAt })
-          });
-        }
-      }
-    } catch (err) {
-      console.error(`Lỗi khi quét tự động số chap trong nền cho "${story.title}":`, err);
-    }
-  };
-
-  // Tự động quét tổng số chap trong nền cho danh sách truyện hiện tại (Throttled)
-  useEffect(() => {
-    if (stories.length === 0) return;
-
-    stories.forEach((story, index) => {
-      if (!story.url) return;
-
-      const cacheKey = `${story._id}_${story.url}`;
-      // Chỉ quét 1 lần duy nhất trên client cho mỗi cặp ID + URL để tránh spam
-      if (scannedStoriesRef.current.has(cacheKey)) return;
-      scannedStoriesRef.current.add(cacheKey);
-
-      // Chia nhỏ thời gian quét để tránh nghẽn luồng và quá tải server
-      setTimeout(() => {
-        scanTotalChapsInBackground(story);
-      }, index * 400); // Mỗi truyện quét cách nhau 400ms
-    });
-  }, [stories]);
 
   // Debounce tìm kiếm để tránh gửi request liên tục làm lag và spam server
   useEffect(() => {
@@ -511,53 +362,7 @@ export default function Home() {
     }
   };
 
-  // Tự động tải ảnh bìa và lưu dạng Base64 vào database khi chạy ở Local (để Vercel hiển thị được trực tiếp)
-  useEffect(() => {
-    const isLocalhost = typeof window !== 'undefined' && 
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-    if (!isLocalhost || !stories || stories.length === 0) return;
 
-    const cacheCovers = async () => {
-      // Tìm các truyện thuộc hệ thống goctruyentranhvui cần cache ảnh
-      const toCache = stories.filter(story => 
-        story.coverUrl && 
-        story.coverUrl.includes('goctruyentranhvui') && 
-        !story.coverUrl.startsWith('data:image')
-      );
-
-      if (toCache.length === 0) return;
-
-      for (const story of toCache) {
-        try {
-          const absoluteUrl = getFullCoverUrl(story.coverUrl, story);
-          const res = await fetch(absoluteUrl);
-          if (!res.ok) continue;
-          const blob = await res.blob();
-          
-          const reader = new FileReader();
-          reader.readAsDataURL(blob);
-          reader.onloadend = async () => {
-            const base64data = reader.result;
-            // Gọi API cập nhật truyện
-            const patchRes = await fetch(`/api/stories/${story._id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ coverUrl: base64data })
-            });
-            const patchData = await patchRes.json();
-            if (patchData.success) {
-              // Cập nhật state cục bộ để UI thay đổi ngay lập tức
-              setStories(prev => prev.map(s => s._id === story._id ? { ...s, coverUrl: base64data } : s));
-            }
-          };
-        } catch (e) {
-          console.error('Lỗi khi cache ảnh bìa sang Base64:', e);
-        }
-      }
-    };
-
-    cacheCovers();
-  }, [stories, comicDomain]);
 
   // Hiển thị Toast
   const showToast = (message, type = 'success') => {
@@ -1232,10 +1037,9 @@ export default function Home() {
       {loading ? (
         <div className="comics-grid">
           {Array.from({ length: limit }).map((_, idx) => (
-            <div key={idx} className="comic-card-v2 skeleton" style={{ minHeight: '230px', opacity: 0.7 }}>
+            <div key={idx} className="comic-card-v2 skeleton" style={{ minHeight: '170px', opacity: 0.7 }}>
               <div className="card-top-info">
-                <div className="card-thumb skeleton-block" style={{ width: '105px', height: '147px', borderRadius: '8px', border: 'none' }} />
-                <div className="card-details" style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'flex-start', padding: '4px 0' }}>
+                <div className="card-details" style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'flex-start', padding: '4px 0', width: '100%' }}>
                   <div className="skeleton-line" style={{ width: '80%', height: '18px', borderRadius: '4px' }} />
                   <div className="skeleton-line" style={{ width: '50%', height: '12px', borderRadius: '4px' }} />
                   <div className="skeleton-line" style={{ width: '100%', height: '30px', borderRadius: '4px', marginTop: '12px' }} />
@@ -1273,25 +1077,8 @@ export default function Home() {
               return (
                 <div key={story._id} className={`comic-card-v2 ${isReadComplete ? 'read-completed' : ''}`}>
 
-                  {/* Dòng đầu: Ảnh bìa + Tên truyện (Không còn chữ tên miền bên dưới) */}
+                  {/* Dòng đầu: Tên truyện và chi tiết */}
                   <div className="card-top-info">
-                    <div className="card-thumb-wrapper" style={{ position: 'relative', flexShrink: 0 }}>
-                      {story.coverUrl ? (
-                        <img
-                          src={getFullCoverUrl(story.coverUrl, story)}
-                          alt={story.title}
-                          className="card-thumb"
-                          onClick={() => window.open(getFullCoverUrl(story.coverUrl, story), '_blank')}
-                          title="Click để phóng to ảnh bìa"
-                          crossOrigin={story.coverUrl && (story.coverUrl.includes('goctruyentranhvui') || story.coverUrl.startsWith('image/')) ? 'use-credentials' : undefined}
-                        />
-                      ) : (
-                        <div className="card-thumb" title="Chưa có ảnh bìa">
-                          📖
-                        </div>
-                      )}
-
-                    </div>
                     <div className="card-details">
                       <h4 className="card-title-v2" title={story.title} style={{
                         display: '-webkit-box',
@@ -1454,7 +1241,6 @@ export default function Home() {
                       <button
                         className="chap-quick-btn"
                         onClick={() => handleQuickChapStep(story, 1)}
-                        disabled={parseFloat(story.totalChaps) > 0 && parseFloat(story.chap) >= parseFloat(story.totalChaps)}
                         title="Tăng 1 chap"
                       >
                         <Plus size={12} />
@@ -1466,27 +1252,17 @@ export default function Home() {
                   <div className="card-actions-v2">
                     {story.url && (
                       <>
-                        {isReadComplete ? (
-                          <button
-                            className="card-nav-btn disabled"
-                            disabled
-                            title="Bạn đã đọc hết chương mới nhất"
-                          >
-                            <span>Hết chap mới</span>
-                          </button>
-                        ) : (
-                          <a
-                            href={nextUrl}
-                            target="comic_reader"
-                            rel="noopener noreferrer"
-                            className={`card-nav-btn ${hasNewChap ? 'has-new-chap' : ''}`}
-                            title={`Đọc Chap ${nextChapNum}`}
-                          >
-                            {hasNewChap && <span className="pulsing-green-dot" />}
-                            <span>Đọc Chap {nextChapNum || 'Tiếp'}</span>
-                            <ExternalLink size={12} />
-                          </a>
-                        )}
+                        <a
+                          href={nextUrl}
+                          target="comic_reader"
+                          rel="noopener noreferrer"
+                          className={`card-nav-btn ${hasNewChap ? 'has-new-chap' : ''}`}
+                          title={`Đọc Chap ${nextChapNum}`}
+                        >
+                          {hasNewChap && <span className="pulsing-green-dot" />}
+                          <span>Đọc Chap {nextChapNum || 'Tiếp'}</span>
+                          <ExternalLink size={12} />
+                        </a>
 
                         <button
                           className="btn-icon"
@@ -1619,26 +1395,15 @@ export default function Home() {
 
                 <div className="form-group">
                   <label className="form-label">Tổng Số Chap</label>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <input
-                      type="number"
-                      step="1"
-                      min="1"
-                      className="form-control"
-                      placeholder="Tổng số chương..."
-                      value={formData.totalChaps}
-                      onChange={(e) => setFormData({ ...formData, totalChaps: e.target.value })}
-                    />
-                    <button
-                      type="button"
-                      className="btn btn-outline"
-                      onClick={() => autoDetectTotalChaps()}
-                      title="Tự động quét số chap từ link đọc"
-                      style={{ padding: '0 12px', fontSize: '13px', whiteSpace: 'nowrap' }}
-                    >
-                      Quét
-                    </button>
-                  </div>
+                  <input
+                    type="number"
+                    step="1"
+                    min="1"
+                    className="form-control"
+                    placeholder="Tổng số chương (tùy chọn)..."
+                    value={formData.totalChaps}
+                    onChange={(e) => setFormData({ ...formData, totalChaps: e.target.value })}
+                  />
                 </div>
               </div>
 
@@ -1647,39 +1412,10 @@ export default function Home() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="Dán link đầy đủ (ví dụ: https://truyenqq.com.vn/ten-truyen) hoặc đường dẫn tương đối..."
+                  placeholder="Dán link đọc (ví dụ: https://truyenqq.com.vn/ten-truyen) hoặc đường dẫn tương đối..."
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                  onBlur={(e) => {
-                    if (e.target.value) {
-                      autoDetectTotalChaps(e.target.value);
-                    }
-                  }}
                 />
-
-              </div>
-
-
-              <div className="form-group">
-                <label className="form-label">Đường Dẫn / Link Ảnh Bìa</label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Dán link hoặc nhập đường dẫn ảnh bìa tương đối (ví dụ: wp-content/uploads/...)..."
-                    value={formData.coverUrl}
-                    onChange={(e) => setFormData({ ...formData, coverUrl: e.target.value })}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-outline"
-                    onClick={() => autoDetectCoverUrl()}
-                    title="Tự động quét ảnh bìa từ link đọc"
-                    style={{ padding: '0 12px', fontSize: '13px', whiteSpace: 'nowrap' }}
-                  >
-                    Quét
-                  </button>
-                </div>
               </div>
 
               <div className="form-group">
