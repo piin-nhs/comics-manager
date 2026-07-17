@@ -1507,7 +1507,7 @@ next-dev-overlay,
   display: flex;
   align-items: center;
   gap: 8px;
-  justify-content: flex-start;
+  justify-content: flex-end;
 }
 
 .row-admin-actions {
