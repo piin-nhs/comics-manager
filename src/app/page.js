@@ -154,9 +154,7 @@ export default function Home() {
   const [formData, setFormData] = useState({
     title: '',
     chap: '1',
-    url: '',
-    rating: 0,
-    status: 'Reading'
+    url: ''
   });
 
   // State cấu hình & phụ trợ
@@ -166,24 +164,6 @@ export default function Home() {
   // State custom select (combobox)
   const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
   const sortDropdownRef = useRef(null);
-
-  // State bộ lọc tiến độ đọc
-  const [filterProgress, setFilterProgress] = useState('incomplete'); // 'all' | 'complete' | 'incomplete'
-  const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
-  const filterDropdownRef = useRef(null);
-
-  // State bộ lọc trạng thái truyện
-  const [filterStatus, setFilterStatus] = useState('Reading'); // 'all' | 'Reading' | 'Completed' | 'OnHold' | 'Dropped'
-  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
-  const statusDropdownRef = useRef(null);
-
-  // Danh sách trạng thái truyện
-  const storyStatuses = [
-    { value: 'Reading', label: 'Đang đọc', color: '#6366f1' },
-    { value: 'Completed', label: 'Hoàn thành', color: '#10b981' },
-    { value: 'OnHold', label: 'Tạm dừng', color: '#f59e0b' },
-    { value: 'Dropped', label: 'Bỏ đọc', color: '#ef4444' }
-  ];
 
   // State theo dõi các phần tử đang được chỉnh sửa nhanh số chap
   const [editingChapId, setEditingChapId] = useState(null);
@@ -202,8 +182,6 @@ export default function Home() {
   const sortOptions = [
     { value: 'updatedAt_desc', label: 'Mới cập nhật' },
     { value: 'updatedAt_asc', label: 'Cũ cập nhật' },
-    { value: 'unread_asc', label: 'Chưa đọc ít nhất' },
-    { value: 'unread_desc', label: 'Chưa đọc nhiều nhất' },
     { value: 'chap_asc', label: 'Số chap nhỏ nhất' },
     { value: 'chap_desc', label: 'Số chap lớn nhất' },
     { value: 'title_asc', label: 'Tên A → Z' },
@@ -262,12 +240,7 @@ export default function Home() {
   // Load danh sách truyện khi bộ lọc hoặc số trang thay đổi
   useEffect(() => {
     fetchStories();
-  }, [page, debouncedSearchQuery, sortBy, filterProgress, filterStatus]);
-
-  // Reset về trang 1 khi bộ lọc tiến độ hoặc trạng thái thay đổi
-  useEffect(() => {
-    setPage(1);
-  }, [filterProgress, filterStatus]);
+  }, [page, debouncedSearchQuery, sortBy]);
 
   // Load theme
   useEffect(() => {
@@ -281,12 +254,6 @@ export default function Home() {
     function handleClickOutside(event) {
       if (sortDropdownRef.current && !sortDropdownRef.current.contains(event.target)) {
         setIsSortDropdownOpen(false);
-      }
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target)) {
-        setIsFilterDropdownOpen(false);
-      }
-      if (statusDropdownRef.current && !statusDropdownRef.current.contains(event.target)) {
-        setIsStatusDropdownOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -375,7 +342,7 @@ export default function Home() {
 
   // Gọi API lấy danh sách truyện (có phân trang)
   const fetchStories = async () => {
-    const cacheKey = `${page}_${debouncedSearchQuery}_${sortBy}_${filterProgress}_${filterStatus}`;
+    const cacheKey = `${page}_${debouncedSearchQuery}_${sortBy}`;
 
     // Kiểm tra cache trên client trước để phản hồi tức thì
     if (searchCache.current.has(cacheKey)) {
@@ -388,9 +355,7 @@ export default function Home() {
 
     setLoading(true);
     try {
-      const activeStatus = debouncedSearchQuery ? '' : (filterStatus === 'all' ? '' : filterStatus);
-      const activeProgress = debouncedSearchQuery ? 'all' : filterProgress;
-      const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}&progress=${activeProgress}&status=${activeStatus}`);
+      const res = await fetch(`/api/stories?page=${page}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}`);
       const data = await res.json();
       if (data.success) {
         setStories(data.data);
@@ -421,13 +386,11 @@ export default function Home() {
   // Tải trước dữ liệu của trang khác khi di chuột vào nút phân trang (Hover Prefetching)
   const prefetchPage = async (p) => {
     if (p < 1 || p > totalPages) return;
-    const cacheKey = `${p}_${debouncedSearchQuery}_${sortBy}_${filterProgress}_${filterStatus}`;
+    const cacheKey = `${p}_${debouncedSearchQuery}_${sortBy}`;
     if (searchCache.current.has(cacheKey)) return;
 
     try {
-      const activeStatus = debouncedSearchQuery ? '' : (filterStatus === 'all' ? '' : filterStatus);
-      const activeProgress = debouncedSearchQuery ? 'all' : filterProgress;
-      const res = await fetch(`/api/stories?page=${p}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}&progress=${activeProgress}&status=${activeStatus}`);
+      const res = await fetch(`/api/stories?page=${p}&limit=${limit}&search=${encodeURIComponent(debouncedSearchQuery)}&sort=${sortBy}`);
       const data = await res.json();
       if (data.success && data.pagination) {
         searchCache.current.set(cacheKey, {
@@ -453,8 +416,6 @@ export default function Home() {
     // - Domain chung (goctruyentranhvui30.com) → lưu relative path (hành vi cũ)
     // - Domain khác → giữ full URL
     const cleanUrl = normalizeStoryUrl(formData.url.trim(), getComicDomain());
-    // Đảm bảo đường dẫn ảnh bìa được làm sạch
-    const cleanCoverUrl = getRelativeCoverPath(formData.coverUrl);
 
     // Kiểm tra trùng lặp link trước khi lưu để cảnh báo
     if (cleanUrl) {
@@ -465,19 +426,11 @@ export default function Home() {
       }
     }
 
-    // Giới hạn số chap điền vào form: không được bằng 0, không được lớn hơn số chap tổng
+    // Giới hạn số chap điền vào form: không được bằng 0 hoặc âm
     const numVal = parseFloat(formData.chap);
-    if (!isNaN(numVal)) {
-      if (numVal <= 0) {
-        showToast('Số chap đã đọc không được bằng 0 hoặc âm. Đã tự động điều chỉnh về 1.', 'warning');
-        formData.chap = '1';
-      }
-
-      const total = parseFloat(formData.totalChaps) || 0;
-      if (total > 0 && numVal > total) {
-        showToast(`Số chap đã đọc không được lớn hơn tổng số chap (${total}). Đã tự động điều chỉnh về ${total}.`, 'warning');
-        formData.chap = total.toString();
-      }
+    if (!isNaN(numVal) && numVal <= 0) {
+      showToast('Số chap đã đọc không được bằng 0 hoặc âm. Đã tự động điều chỉnh về 1.', 'warning');
+      formData.chap = '1';
     }
 
     try {
@@ -489,11 +442,7 @@ export default function Home() {
           body: JSON.stringify({
             title: formData.title,
             chap: formData.chap,
-            url: cleanUrl,
-            coverUrl: cleanCoverUrl,
-            rating: formData.rating,
-            totalChaps: formData.totalChaps,
-            status: formData.status || 'Reading'
+            url: cleanUrl
           })
         });
       } else {
@@ -503,11 +452,7 @@ export default function Home() {
           body: JSON.stringify({
             title: formData.title,
             chap: formData.chap,
-            url: cleanUrl,
-            coverUrl: cleanCoverUrl,
-            rating: formData.rating,
-            totalChaps: formData.totalChaps,
-            status: formData.status || 'Reading'
+            url: cleanUrl
           })
         });
       }
@@ -791,11 +736,7 @@ export default function Home() {
     setFormData({
       title: story.title,
       chap: story.chap,
-      url: story.url || '',
-      coverUrl: story.coverUrl || '',
-      rating: story.rating || 0,
-      totalChaps: story.totalChaps ? story.totalChaps.toString() : '',
-      status: story.status || 'Reading'
+      url: story.url || ''
     });
     setIsModalOpen(true);
   };
@@ -804,11 +745,7 @@ export default function Home() {
     setFormData({
       title: '',
       chap: '1',
-      url: '',
-      coverUrl: '',
-      rating: 0,
-      totalChaps: '',
-      status: 'Reading'
+      url: ''
     });
     setSelectedStory(null);
   };
@@ -838,7 +775,6 @@ export default function Home() {
           className="brand-title"
           onClick={() => {
             setSearchQuery('');
-            setFilterProgress('incomplete');
             setSortBy('updatedAt_desc');
             setPage(1);
             searchCache.current.clear();
@@ -933,107 +869,21 @@ export default function Home() {
             )}
           </div>
 
-          {/* Dropdown bộ lọc tiến độ đọc */}
-          <div className="custom-select-wrapper" ref={filterDropdownRef}>
-            <button
-              type="button"
-              className={`custom-select-trigger ${filterProgress !== 'all' ? 'filter-active' : ''}`}
-              onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-            >
-              <span>
-                {filterProgress === 'all' && 'Tiến độ: Tất cả'}
-                {filterProgress === 'complete' && 'Đọc 100%'}
-                {filterProgress === 'incomplete' && 'Chưa 100%'}
-              </span>
-              <ChevronDown size={16} className={`arrow-icon ${isFilterDropdownOpen ? 'open' : ''}`} />
-            </button>
-            {isFilterDropdownOpen && (
-              <div className="custom-select-options">
-                {[
-                  { value: 'all', label: 'Tiến độ: Tất cả' },
-                  { value: 'complete', label: 'Đọc 100%' },
-                  { value: 'incomplete', label: 'Chưa 100%' }
-                ].map(opt => (
-                  <div
-                    key={opt.value}
-                    className={`custom-select-option ${filterProgress === opt.value ? 'selected' : ''}`}
-                    onClick={() => {
-                      setFilterProgress(opt.value);
-                      setIsFilterDropdownOpen(false);
-                      searchCache.current.clear();
-                    }}
-                  >
-                    {opt.label}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
 
-          {/* Dropdown bộ lọc trạng thái truyện */}
-          <div className="custom-select-wrapper" ref={statusDropdownRef}>
-            <button
-              type="button"
-              className={`custom-select-trigger ${filterStatus !== 'all' ? 'filter-active' : ''}`}
-              onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-            >
-              <span>
-                {filterStatus === 'all' && 'Trạng thái: Tất cả'}
-                {filterStatus !== 'all' && (storyStatuses.find(s => s.value === filterStatus)?.label || filterStatus)}
-              </span>
-              <ChevronDown size={16} className={`arrow-icon ${isStatusDropdownOpen ? 'open' : ''}`} />
-            </button>
-            {isStatusDropdownOpen && (
-              <div className="custom-select-options">
-                <div
-                  className={`custom-select-option ${filterStatus === 'all' ? 'selected' : ''}`}
-                  onClick={() => {
-                    setFilterStatus('all');
-                    setIsStatusDropdownOpen(false);
-                    searchCache.current.clear();
-                  }}
-                >
-                  Trạng thái: Tất cả
-                </div>
-                {storyStatuses.map(st => (
-                  <div
-                    key={st.value}
-                    className={`custom-select-option ${filterStatus === st.value ? 'selected' : ''}`}
-                    onClick={() => {
-                      setFilterStatus(st.value);
-                      setIsStatusDropdownOpen(false);
-                      searchCache.current.clear();
-                    }}
-                    style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-                  >
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: st.color, display: 'inline-block', flexShrink: 0 }} />
-                    {st.label}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       </section>
 
-      {/* Danh sách truyện dạng THẺ CÁ NHÂN (Cards Grid) */}
+      {/* Danh sách truyện dạng LIST ROW */}
       {loading ? (
-        <div className="comics-grid">
+        <div className="comics-list">
           {Array.from({ length: limit }).map((_, idx) => (
-            <div key={idx} className="comic-card-v2 skeleton" style={{ minHeight: '170px', opacity: 0.7 }}>
-              <div className="card-top-info">
-                <div className="card-details" style={{ display: 'flex', flexDirection: 'column', gap: '8px', justifyContent: 'flex-start', padding: '4px 0', width: '100%' }}>
-                  <div className="skeleton-line" style={{ width: '80%', height: '18px', borderRadius: '4px' }} />
-                  <div className="skeleton-line" style={{ width: '50%', height: '12px', borderRadius: '4px' }} />
-                  <div className="skeleton-line" style={{ width: '100%', height: '30px', borderRadius: '4px', marginTop: '12px' }} />
-                  <div className="skeleton-line" style={{ width: '40%', height: '12px', borderRadius: '4px', marginTop: 'auto' }} />
-                </div>
-              </div>
-              <div className="card-chap-row skeleton-block" style={{ height: '34px', borderRadius: '8px', border: 'none' }} />
-              <div className="card-actions-v2" style={{ gap: '6px' }}>
-                <div className="skeleton-block" style={{ flexGrow: 1, height: '32px', borderRadius: '8px' }} />
-                <div className="skeleton-block" style={{ width: '32px', height: '32px', borderRadius: '8px' }} />
-                <div className="skeleton-block" style={{ width: '32px', height: '32px', borderRadius: '8px' }} />
+            <div key={idx} className="comic-row skeleton" style={{ minHeight: '68px', opacity: 0.7 }}>
+              <div style={{ display: 'flex', flexGrow: 1, gap: '16px', alignItems: 'center', width: '100%' }}>
+                <div className="skeleton-line" style={{ width: '40%', height: '18px', borderRadius: '4px' }} />
+                <div className="skeleton-line" style={{ width: '15%', height: '16px', borderRadius: '4px' }} />
+                <div className="skeleton-line" style={{ width: '20%', height: '32px', borderRadius: '6px', marginLeft: 'auto' }} />
+                <div className="skeleton-block" style={{ width: '32px', height: '32px', borderRadius: '6px' }} />
+                <div className="skeleton-block" style={{ width: '32px', height: '32px', borderRadius: '6px' }} />
               </div>
             </div>
           ))}
@@ -1046,157 +896,90 @@ export default function Home() {
         </div>
       ) : (
         <>
-          <div className="comics-grid">
+          <div className="comics-list">
             {stories.map((story) => {
               const currentUrl = getCurrentChapUrl(story.url, story.chap, story);
               const nextUrl = getNextChapUrl(story.url, story.chap, story);
               const nextChapNum = (parseFloat(story.chap) + 1) || '';
 
               return (
-                <div key={story._id} className="comic-card-v2">
-
-                  {/* Dòng đầu: Tên truyện và chi tiết */}
-                  <div className="card-top-info">
-                    <div className="card-details">
-                      <h4 className="card-title-v2" title={story.title} style={{
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden'
-                      }}>{story.title}</h4>
-
-                      {/* Hàng: Sao đánh giá + Badge trạng thái */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', margin: '4px 0', flexWrap: 'wrap' }}>
-                        <div className="card-rating-stars" title={`Đánh giá: ${story.rating || 0}/5 sao`} style={{ display: 'flex', gap: '2px' }}>
-                          {Array.from({ length: 5 }).map((_, idx) => (
-                            <Star
-                              key={idx}
-                              size={13}
-                              style={{
-                                fill: idx < (story.rating || 0) ? '#fbbf24' : 'none',
-                                color: idx < (story.rating || 0) ? '#fbbf24' : 'var(--border-color)',
-                              }}
-                            />
-                          ))}
-                        </div>
-                        {(() => {
-                          const st = storyStatuses.find(s => s.value === (story.status || 'Reading'));
-                          return (
-                            <span style={{
-                              display: 'inline-block',
-                              fontSize: '10px',
-                              fontWeight: '700',
-                              padding: '1px 7px',
-                              borderRadius: '20px',
-                              backgroundColor: st ? st.color + '22' : '#6366f122',
-                              color: st ? st.color : '#6366f1',
-                              border: `1px solid ${st ? st.color + '55' : '#6366f155'}`,
-                              letterSpacing: '0.3px',
-                              whiteSpace: 'nowrap'
-                            }}>
-                              {st ? st.label : 'Đang đọc'}
-                            </span>
-                          );
-                        })()}
-                      </div>
-
-                      {/* Hiển thị số chương đã đọc đơn giản */}
-                      <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', margin: '6px 0 8px 0' }}>
-                        Đã đọc: <span style={{ color: 'var(--primary-color)', fontWeight: '700' }}>{story.chap}</span> chap
-                      </div>
-
-                      <div className="card-meta-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'auto', width: '100%', flexWrap: 'wrap' }}>
-                        {story.updatedAt && (
-                          <span className="card-update-time" title="Cập nhật cuối">
-                            {getRelativeTime(story.updatedAt)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                <div key={story._id} className="comic-row">
+                  {/* Cột 1: Tên truyện và thời gian cập nhật */}
+                  <div className="row-info">
+                    <h4 className="row-title" title={story.title}>{story.title}</h4>
+                    {story.updatedAt && (
+                      <span className="row-update-time" title="Cập nhật cuối">
+                        🕒 {getRelativeTime(story.updatedAt)}
+                      </span>
+                    )}
                   </div>
 
-                  {/* Dòng giữa: Thay "Đã đọc tới:" bằng Link chương hiện tại nếu có */}
-                  <div className="card-chap-row">
-                    {story.url ? (
-                      <a
-                        href={currentUrl}
-                        target="comic_reader"
-                        rel="noopener noreferrer"
-                        className="current-link"
-                        title="Mở chương hiện tại bạn đã đọc"
-                      >
-                        <span>Link hiện tại</span>
-                        <ExternalLink size={11} />
-                      </a>
+                  {/* Cột 2: Bộ tăng giảm số chap */}
+                  <div className="row-chap-control">
+                    <span className="row-chap-label">Đã đọc:</span>
+                    <button
+                      className="chap-quick-btn"
+                      onClick={() => handleQuickChapStep(story, -1)}
+                      disabled={parseFloat(story.chap) <= 1}
+                      title="Giảm 1 chap"
+                    >
+                      <Minus size={12} />
+                    </button>
+
+                    {editingChapId === story._id ? (
+                      <input
+                        type="text"
+                        value={tempChapVal}
+                        onChange={(e) => setTempChapVal(e.target.value)}
+                        onBlur={() => saveInlineChap(story)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveInlineChap(story);
+                          if (e.key === 'Escape') setEditingChapId(null);
+                        }}
+                        autoFocus
+                        className="inline-chap-input"
+                        style={{ width: '45px', textAlign: 'center' }}
+                      />
                     ) : (
-                      <span className="no-link-text">Chưa gắn link</span>
+                      <span
+                        onClick={() => startInlineEdit(story)}
+                        title="Click để sửa nhanh"
+                        className="row-chap-num"
+                      >
+                        {story.chap}
+                      </span>
                     )}
 
-                    {/* Bộ tăng giảm số chap */}
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                      <button
-                        className="chap-quick-btn"
-                        onClick={() => handleQuickChapStep(story, -1)}
-                        disabled={parseFloat(story.chap) <= 1}
-                        title="Giảm 1 chap"
-                      >
-                        <Minus size={12} />
-                      </button>
-
-                      {editingChapId === story._id ? (
-                        <input
-                          type="text"
-                          value={tempChapVal}
-                          onChange={(e) => setTempChapVal(e.target.value)}
-                          onBlur={() => saveInlineChap(story)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') saveInlineChap(story);
-                            if (e.key === 'Escape') setEditingChapId(null);
-                          }}
-                          autoFocus
-                          className="inline-chap-input"
-                        />
-                      ) : (
-                        <span
-                          onClick={() => startInlineEdit(story)}
-                          title="Click để sửa nhanh"
-                          style={{
-                            display: 'inline-block',
-                            minWidth: '42px',
-                            padding: '3px 6px',
-                            borderRadius: '4px',
-                            backgroundColor: 'var(--bg-primary)',
-                            border: '1px dashed var(--border-color)',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            fontWeight: '700',
-                            color: 'var(--primary-color)',
-                            textAlign: 'center'
-                          }}
-                        >
-                          {story.chap}
-                        </span>
-                      )}
-
-                      <button
-                        className="chap-quick-btn"
-                        onClick={() => handleQuickChapStep(story, 1)}
-                        title="Tăng 1 chap"
-                      >
-                        <Plus size={12} />
-                      </button>
-                    </div>
+                    <button
+                      className="chap-quick-btn"
+                      onClick={() => handleQuickChapStep(story, 1)}
+                      title="Tăng 1 chap"
+                    >
+                      <Plus size={12} />
+                    </button>
+                    <span className="row-chap-unit">chap</span>
                   </div>
 
-                  {/* Dòng cuối: Nút đọc tiếp + các icon hành động */}
-                  <div className="card-actions-v2">
-                    {story.url && (
+                  {/* Cột 3: Liên kết đọc truyện */}
+                  <div className="row-read-actions">
+                    {story.url ? (
                       <>
+                        <a
+                          href={currentUrl}
+                          target="comic_reader"
+                          rel="noopener noreferrer"
+                          className="row-link-btn outline"
+                          title="Đọc chương hiện tại"
+                        >
+                          <span>Chap hiện tại</span>
+                          <ExternalLink size={12} />
+                        </a>
+
                         <a
                           href={nextUrl}
                           target="comic_reader"
                           rel="noopener noreferrer"
-                          className="card-nav-btn"
+                          className="row-link-btn primary"
                           title={`Đọc Chap ${nextChapNum}`}
                         >
                           <span>Đọc Chap {nextChapNum || 'Tiếp'}</span>
@@ -1211,23 +994,27 @@ export default function Home() {
                         >
                           {copiedId === story._id ? <Check size={12} style={{ color: 'var(--success)' }} /> : <Copy size={12} />}
                         </button>
-                        <div style={{ width: '1px', height: '18px', backgroundColor: 'var(--border-color)', margin: '0 2px' }}></div>
                       </>
+                    ) : (
+                      <span className="no-link-text">Chưa gắn link</span>
                     )}
+                  </div>
 
+                  {/* Cột 4: Nút quản trị (sửa, xóa) */}
+                  <div className="row-admin-actions">
                     <button
                       className="btn-icon"
                       onClick={() => openEditModal(story)}
-                      style={{ width: '32px', height: '32px', borderRadius: '8px', marginLeft: story.url ? '0' : 'auto' }}
+                      style={{ width: '32px', height: '32px', borderRadius: '8px' }}
                       title="Sửa thông tin"
                     >
                       <Edit3 size={12} />
                     </button>
 
                     <button
-                      className="btn-icon"
+                      className="btn-icon delete"
                       onClick={() => handleDelete(story)}
-                      style={{ width: '32px', height: '32px', borderRadius: '8px', color: 'var(--danger)' }}
+                      style={{ width: '32px', height: '32px', borderRadius: '8px' }}
                       title="Xóa truyện"
                     >
                       <Trash2 size={12} />
@@ -1318,32 +1105,17 @@ export default function Home() {
                 />
               </div>
 
-              <div className="form-row-2col">
-                <div className="form-group">
-                  <label className="form-label">Số Chap Đã Đọc</label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
-                    className="form-control"
-                    placeholder="Nhập số chương đã đọc..."
-                    value={formData.chap}
-                    onChange={(e) => setFormData({ ...formData, chap: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Tổng Số Chap</label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="1"
-                    className="form-control"
-                    placeholder="Tổng số chương (tùy chọn)..."
-                    value={formData.totalChaps}
-                    onChange={(e) => setFormData({ ...formData, totalChaps: e.target.value })}
-                  />
-                </div>
+              <div className="form-group">
+                <label className="form-label">Số Chap Đã Đọc</label>
+                <input
+                  type="number"
+                  step="1"
+                  min="1"
+                  className="form-control"
+                  placeholder="Nhập số chương đã đọc..."
+                  value={formData.chap}
+                  onChange={(e) => setFormData({ ...formData, chap: e.target.value })}
+                />
               </div>
 
               <div className="form-group">
@@ -1355,78 +1127,6 @@ export default function Home() {
                   value={formData.url}
                   onChange={(e) => setFormData({ ...formData, url: e.target.value })}
                 />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Đánh Giá Truyện (Rating)</label>
-                <div className="form-rating-selector" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px' }}>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    {Array.from({ length: 5 }).map((_, idx) => {
-                      const starVal = idx + 1;
-                      return (
-                        <button
-                          type="button"
-                          key={idx}
-                          className="star-selector-btn"
-                          onClick={() => {
-                            if (formData.rating === starVal) {
-                              setFormData({ ...formData, rating: 0 }); // Nhấp lại sao hiện tại để xóa đánh giá
-                            } else {
-                              setFormData({ ...formData, rating: starVal });
-                            }
-                          }}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            padding: 0,
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}
-                          title={`${starVal} sao`}
-                        >
-                          <Star
-                            size={24}
-                            style={{
-                              fill: starVal <= formData.rating ? '#fbbf24' : 'none',
-                              color: starVal <= formData.rating ? '#fbbf24' : 'var(--border-color)',
-                              transition: 'transform 0.15s ease'
-                            }}
-                          />
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                    {formData.rating > 0 ? `${formData.rating}/5 sao` : 'Chưa đánh giá'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Trạng Thái Truyện</label>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '4px' }}>
-                  {storyStatuses.map(st => (
-                    <button
-                      key={st.value}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, status: st.value })}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: '20px',
-                        border: `1.5px solid ${st.color}`,
-                        backgroundColor: formData.status === st.value ? st.color : 'transparent',
-                        color: formData.status === st.value ? '#fff' : st.color,
-                        fontWeight: '700',
-                        fontSize: '12px',
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease'
-                      }}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <div className="form-actions">
