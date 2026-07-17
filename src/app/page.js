@@ -511,7 +511,53 @@ export default function Home() {
     }
   };
 
+  // Tự động tải ảnh bìa và lưu dạng Base64 vào database khi chạy ở Local (để Vercel hiển thị được trực tiếp)
+  useEffect(() => {
+    const isLocalhost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+    if (!isLocalhost || !stories || stories.length === 0) return;
 
+    const cacheCovers = async () => {
+      // Tìm các truyện thuộc hệ thống goctruyentranhvui cần cache ảnh
+      const toCache = stories.filter(story => 
+        story.coverUrl && 
+        story.coverUrl.includes('goctruyentranhvui') && 
+        !story.coverUrl.startsWith('data:image')
+      );
+
+      if (toCache.length === 0) return;
+
+      for (const story of toCache) {
+        try {
+          const absoluteUrl = getFullCoverUrl(story.coverUrl, story);
+          const res = await fetch(absoluteUrl);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = async () => {
+            const base64data = reader.result;
+            // Gọi API cập nhật truyện
+            const patchRes = await fetch(`/api/stories/${story._id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ coverUrl: base64data })
+            });
+            const patchData = await patchRes.json();
+            if (patchData.success) {
+              // Cập nhật state cục bộ để UI thay đổi ngay lập tức
+              setStories(prev => prev.map(s => s._id === story._id ? { ...s, coverUrl: base64data } : s));
+            }
+          };
+        } catch (e) {
+          console.error('Lỗi khi cache ảnh bìa sang Base64:', e);
+        }
+      }
+    };
+
+    cacheCovers();
+  }, [stories, comicDomain]);
 
   // Hiển thị Toast
   const showToast = (message, type = 'success') => {
@@ -886,6 +932,7 @@ export default function Home() {
   // Sinh URL tuyệt đối đầy đủ cho ảnh bìa
   const getFullCoverUrl = (url, story) => {
     if (!url) return '';
+    if (url.startsWith('data:image')) return url;
     
     let absoluteUrl = url;
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
