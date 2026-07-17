@@ -893,9 +893,13 @@ export default function Home() {
       absoluteUrl = `${getStoryDomain(story)}/${cleanPath}`;
     }
     
-    // Nếu là truyện thuộc hệ thống goctruyentranhvui, chuyển hướng qua proxy trên server để vượt CORP/Cloudflare
+    // Nếu chạy ở localhost, proxy qua server để tự xử lý CORS/CORP mà không cần cài extension
+    // Nếu chạy ở tên miền khác (Vercel), phải gọi trực tiếp để trình duyệt tự gửi kèm cookie đúng IP của mình (cần bật tiện ích CORS Unblock)
+    const isLocalhost = typeof window !== 'undefined' && 
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+
     const storyDomain = getStoryDomain(story);
-    if (storyDomain && storyDomain.includes('goctruyentranhvui')) {
+    if (isLocalhost && storyDomain && storyDomain.includes('goctruyentranhvui')) {
       return `/api/proxy-image?url=${encodeURIComponent(absoluteUrl)}`;
     }
     
