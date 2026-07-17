@@ -145,13 +145,22 @@ export async function GET(request) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 giây timeout
 
+    const cleanUa = (uaSetting?.value || '')
+      .trim()
+      .replace(/^['"]|['"]$/g, '');
+
     const headers = {
-      'User-Agent': uaSetting?.value || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': cleanUa || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
       'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
     };
+    
     if (cookieSetting?.value) {
-      headers['Cookie'] = cookieSetting.value;
+      let cleanCookie = cookieSetting.value.trim().replace(/^['"]|['"]$/g, '');
+      if (cleanCookie && !cleanCookie.startsWith('cf_clearance=')) {
+        cleanCookie = `cf_clearance=${cleanCookie}`;
+      }
+      headers['Cookie'] = cleanCookie;
     }
 
     const response = await fetch(resolvedUrl, {

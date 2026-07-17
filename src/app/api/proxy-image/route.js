@@ -17,11 +17,20 @@ export async function GET(request) {
     const cookieSetting = settings.find(s => s.key === 'comic_cookie');
     const uaSetting = settings.find(s => s.key === 'comic_user_agent');
 
+    const cleanUa = (uaSetting?.value || '')
+      .trim()
+      .replace(/^['"]|['"]$/g, '');
+      
     const headers = {
-      'User-Agent': uaSetting?.value || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': cleanUa || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     };
+    
     if (cookieSetting?.value) {
-      headers['Cookie'] = cookieSetting.value;
+      let cleanCookie = cookieSetting.value.trim().replace(/^['"]|['"]$/g, '');
+      if (cleanCookie && !cleanCookie.startsWith('cf_clearance=')) {
+        cleanCookie = `cf_clearance=${cleanCookie}`;
+      }
+      headers['Cookie'] = cleanCookie;
     }
 
     // Thiết lập timeout 8 giây
