@@ -142,14 +142,10 @@ export default function Home() {
   const [modalMode, setModalMode] = useState('add'); // 'add' hoặc 'edit'
   const [selectedStory, setSelectedStory] = useState(null);
 
-  // State cấu hình domain dùng chung và Cloudflare
+  // State cấu hình domain dùng chung
   const [comicDomain, setComicDomain] = useState('https://goctruyentranhvui30.com');
-  const [comicCookie, setComicCookie] = useState('');
-  const [comicUserAgent, setComicUserAgent] = useState('');
   const [isDomainModalOpen, setIsDomainModalOpen] = useState(false);
   const [tempDomain, setTempDomain] = useState('');
-  const [tempCookie, setTempCookie] = useState('');
-  const [tempUserAgent, setTempUserAgent] = useState('');
   const [saveDomainLoading, setSaveDomainLoading] = useState(false);
 
 
@@ -159,9 +155,7 @@ export default function Home() {
     title: '',
     chap: '1',
     url: '',
-    coverUrl: '',
     rating: 0,
-    totalChaps: '',
     status: 'Reading'
   });
 
@@ -302,33 +296,28 @@ export default function Home() {
   }, []);
 
   // Tải cấu hình domain từ database
-  // Tải cấu hình domain và Cloudflare từ database
   useEffect(() => {
     const fetchDomain = async () => {
       try {
         const res = await fetch('/api/settings');
         const data = await res.json();
-        if (data.success) {
-          if (data.domain) setComicDomain(data.domain);
-          if (data.cookie) setComicCookie(data.cookie);
-          if (data.userAgent) setComicUserAgent(data.userAgent);
+        if (data.success && data.domain) {
+          setComicDomain(data.domain);
         }
       } catch (err) {
-        console.error('Lỗi khi nạp cấu hình domain và Cloudflare:', err);
+        console.error('Lỗi khi nạp cấu hình domain:', err);
       }
     };
     fetchDomain();
   }, []);
 
-  // Mở modal cấu hình domain và Cloudflare
+  // Mở modal cấu hình domain
   const openDomainModal = () => {
     setTempDomain(comicDomain);
-    setTempCookie(comicCookie);
-    setTempUserAgent(comicUserAgent);
     setIsDomainModalOpen(true);
   };
 
-  // Lưu cấu hình domain và Cloudflare mới
+  // Lưu cấu hình domain mới
   const handleSaveDomain = async (e) => {
     e.preventDefault();
     if (!tempDomain.trim()) return;
@@ -338,21 +327,15 @@ export default function Home() {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          domain: tempDomain.trim(),
-          cookie: tempCookie.trim(),
-          userAgent: tempUserAgent.trim()
-        })
+        body: JSON.stringify({ domain: tempDomain.trim() })
       });
       const data = await res.json();
       if (data.success) {
         setComicDomain(tempDomain.trim());
-        setComicCookie(tempCookie.trim());
-        setComicUserAgent(tempUserAgent.trim());
         setIsDomainModalOpen(false);
-        showToast('Đã lưu cấu hình cài đặt!');
+        showToast('Đã lưu cấu hình domain dùng chung!');
       } else {
-        showToast(data.error || 'Không thể lưu cài đặt', 'danger');
+        showToast(data.error || 'Không thể lưu domain', 'danger');
       }
     } catch (err) {
       console.error(err);
@@ -1068,14 +1051,9 @@ export default function Home() {
               const currentUrl = getCurrentChapUrl(story.url, story.chap, story);
               const nextUrl = getNextChapUrl(story.url, story.chap, story);
               const nextChapNum = (parseFloat(story.chap) + 1) || '';
-              const currentChapNum = parseFloat(story.chap) || 0;
-              const totalChapNum = parseFloat(story.totalChaps) || 0;
-              const hasNewChap = totalChapNum > currentChapNum;
-              const isReadComplete = totalChapNum > 0 && currentChapNum >= totalChapNum;
-              const unreadCount = totalChapNum > currentChapNum ? Number((totalChapNum - currentChapNum).toFixed(2)) : 0;
 
               return (
-                <div key={story._id} className={`comic-card-v2 ${isReadComplete ? 'read-completed' : ''}`}>
+                <div key={story._id} className="comic-card-v2">
 
                   {/* Dòng đầu: Tên truyện và chi tiết */}
                   <div className="card-top-info">
@@ -1122,53 +1100,15 @@ export default function Home() {
                         })()}
                       </div>
 
-                      {/* Thanh tiến độ đọc */}
-                      {(() => {
-                        const current = parseFloat(story.chap) || 0;
-                        const total = parseFloat(story.totalChaps) || 0;
-                        const percent = total > 0
-                          ? (current >= total ? 100 : Math.min(99, Math.round((current / total) * 100)))
-                          : 0;
-
-                        return total > 0 ? (
-                          <div className="card-progress-wrapper" style={{ margin: '4px 0 8px 0' }}>
-                            <div style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              fontSize: '11px',
-                              fontWeight: '700',
-                              color: percent === 100 ? 'var(--success)' : 'var(--text-secondary)',
-                              marginBottom: '2px'
-                            }}>
-                              <span>Tiến độ: {story.chap}/{story.totalChaps} chap</span>
-                              <span style={{ color: percent === 100 ? 'var(--success)' : 'inherit' }}>{percent}%</span>
-                            </div>
-                            <div style={{ width: '100%', height: '5px', backgroundColor: 'var(--border-color)', borderRadius: '3px', overflow: 'hidden' }}>
-                              <div style={{
-                                width: `${percent}%`,
-                                height: '100%',
-                                backgroundColor: percent === 100 ? 'var(--success)' : 'var(--primary-color)',
-                                borderRadius: '3px',
-                                transition: 'width 0.3s ease'
-                              }} />
-                            </div>
-                          </div>
-                        ) : (
-                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontStyle: 'italic', margin: '4px 0 8px 0' }}>
-                            Chưa quét số chap mới
-                          </div>
-                        );
-                      })()}
+                      {/* Hiển thị số chương đã đọc đơn giản */}
+                      <div style={{ fontSize: '12px', fontWeight: '600', color: 'var(--text-secondary)', margin: '6px 0 8px 0' }}>
+                        Đã đọc: <span style={{ color: 'var(--primary-color)', fontWeight: '700' }}>{story.chap}</span> chap
+                      </div>
 
                       <div className="card-meta-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: 'auto', width: '100%', flexWrap: 'wrap' }}>
                         {story.updatedAt && (
                           <span className="card-update-time" title="Cập nhật cuối">
                             {getRelativeTime(story.updatedAt)}
-                          </span>
-                        )}
-                        {unreadCount > 0 && (
-                          <span className="card-unread-count" title="Số chap chưa đọc">
-                            {unreadCount}
                           </span>
                         )}
                       </div>
@@ -1256,10 +1196,9 @@ export default function Home() {
                           href={nextUrl}
                           target="comic_reader"
                           rel="noopener noreferrer"
-                          className={`card-nav-btn ${hasNewChap ? 'has-new-chap' : ''}`}
+                          className="card-nav-btn"
                           title={`Đọc Chap ${nextChapNum}`}
                         >
-                          {hasNewChap && <span className="pulsing-green-dot" />}
                           <span>Đọc Chap {nextChapNum || 'Tiếp'}</span>
                           <ExternalLink size={12} />
                         </a>
@@ -1503,12 +1442,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* Modal Cấu hình Domain & Cloudflare */}
+      {/* Modal Cấu hình Domain */}
       {isDomainModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px' }}>
+          <div className="modal-content" style={{ maxWidth: '450px' }}>
             <div className="modal-header">
-              <h3 className="modal-title">⚙️ Cấu Hình Hệ Thống</h3>
+              <h3 className="modal-title">🌐 Cấu Hình Domain</h3>
               <button className="btn-icon" onClick={() => setIsDomainModalOpen(false)}>
                 <X size={18} />
               </button>
@@ -1525,46 +1464,17 @@ export default function Home() {
                   onChange={(e) => setTempDomain(e.target.value)}
                   required
                 />
-                <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.4' }}>
+                <small style={{ display: 'block', marginTop: '8px', color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.4' }}>
                   Domain này dùng để tự động tạo link đọc cho các truyện chỉ lưu đường dẫn tương đối (ví dụ: <code>truyen/tuyet-the-quan-lam</code>).
                 </small>
               </div>
 
-              <div className="form-group" style={{ marginTop: '16px' }}>
-                <label className="form-label">Cloudflare Cookie (cf_clearance) <span style={{ color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Tùy chọn)</span></label>
-                <textarea
-                  className="form-control"
-                  style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '12px' }}
-                  placeholder="Ví dụ: cf_clearance=abcd1234..."
-                  value={tempCookie}
-                  onChange={(e) => setTempCookie(e.target.value)}
-                />
-                <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-secondary)', fontSize: '11px', lineHeight: '1.4' }}>
-                  Lấy từ tab Cookie trên trình duyệt khi truy cập trang truyện (để vượt mã xác minh Cloudflare).
-                </small>
-              </div>
-
-              <div className="form-group" style={{ marginTop: '16px' }}>
-                <label className="form-label">User-Agent Trình Duyệt <span style={{ color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Tùy chọn)</span></label>
-                <input
-                  type="text"
-                  className="form-control"
-                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
-                  placeholder="Mozilla/5.0..."
-                  value={tempUserAgent}
-                  onChange={(e) => setTempUserAgent(e.target.value)}
-                />
-                <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-secondary)', fontSize: '11px', lineHeight: '1.4' }}>
-                  User-Agent phải khớp với trình duyệt bạn lấy Cookie.
-                </small>
-              </div>
-
-              <div className="form-actions" style={{ marginTop: '20px' }}>
+              <div className="form-actions">
                 <button type="button" className="btn btn-outline" onClick={() => setIsDomainModalOpen(false)}>
                   Hủy
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={saveDomainLoading}>
-                  {saveDomainLoading ? 'Đang lưu...' : 'Lưu Cài Đặt'}
+                  {saveDomainLoading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
                 </button>
               </div>
             </form>
