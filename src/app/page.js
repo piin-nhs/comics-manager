@@ -1236,6 +1236,7 @@ export default function Home() {
                           className="card-thumb"
                           onClick={() => window.open(getFullCoverUrl(story.coverUrl, story), '_blank')}
                           title="Click để phóng to ảnh bìa"
+                          crossOrigin={story.coverUrl && (story.coverUrl.includes('goctruyentranhvui') || story.coverUrl.startsWith('image/')) ? 'use-credentials' : undefined}
                         />
                       ) : (
                         <div className="card-thumb" title="Chưa có ảnh bìa">
