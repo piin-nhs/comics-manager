@@ -447,28 +447,33 @@ export default function Home() {
   }, []);
 
   // Tải cấu hình domain từ database
+  // Tải cấu hình domain và Cloudflare từ database
   useEffect(() => {
     const fetchDomain = async () => {
       try {
         const res = await fetch('/api/settings');
         const data = await res.json();
-        if (data.success && data.domain) {
-          setComicDomain(data.domain);
+        if (data.success) {
+          if (data.domain) setComicDomain(data.domain);
+          if (data.cookie) setComicCookie(data.cookie);
+          if (data.userAgent) setComicUserAgent(data.userAgent);
         }
       } catch (err) {
-        console.error('Lỗi khi nạp cấu hình domain:', err);
+        console.error('Lỗi khi nạp cấu hình domain và Cloudflare:', err);
       }
     };
     fetchDomain();
   }, []);
 
-  // Mở modal cấu hình domain
+  // Mở modal cấu hình domain và Cloudflare
   const openDomainModal = () => {
     setTempDomain(comicDomain);
+    setTempCookie(comicCookie);
+    setTempUserAgent(comicUserAgent);
     setIsDomainModalOpen(true);
   };
 
-  // Lưu cấu hình domain mới
+  // Lưu cấu hình domain và Cloudflare mới
   const handleSaveDomain = async (e) => {
     e.preventDefault();
     if (!tempDomain.trim()) return;
@@ -478,15 +483,21 @@ export default function Home() {
       const res = await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ domain: tempDomain.trim() })
+        body: JSON.stringify({ 
+          domain: tempDomain.trim(),
+          cookie: tempCookie.trim(),
+          userAgent: tempUserAgent.trim()
+        })
       });
       const data = await res.json();
       if (data.success) {
         setComicDomain(tempDomain.trim());
+        setComicCookie(tempCookie.trim());
+        setComicUserAgent(tempUserAgent.trim());
         setIsDomainModalOpen(false);
-        showToast('Đã lưu cấu hình domain dùng chung!');
+        showToast('Đã lưu cấu hình cài đặt!');
       } else {
-        showToast(data.error || 'Không thể lưu domain', 'danger');
+        showToast(data.error || 'Không thể lưu cài đặt', 'danger');
       }
     } catch (err) {
       console.error(err);
@@ -871,11 +882,20 @@ export default function Home() {
   // Sinh URL tuyệt đối đầy đủ cho ảnh bìa
   const getFullCoverUrl = (url, story) => {
     if (!url) return '';
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
+    
+    let absoluteUrl = url;
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      const cleanPath = url.replace(/^\/|\/$/g, '');
+      absoluteUrl = `${getStoryDomain(story)}/${cleanPath}`;
     }
-    const cleanPath = url.replace(/^\/|\/$/g, '');
-    return `${getStoryDomain(story)}/${cleanPath}`;
+    
+    // Nếu là truyện thuộc hệ thống goctruyentranhvui, chuyển hướng qua proxy trên server để vượt CORP/Cloudflare
+    const storyDomain = getStoryDomain(story);
+    if (storyDomain && storyDomain.includes('goctruyentranhvui')) {
+      return `/api/proxy-image?url=${encodeURIComponent(absoluteUrl)}`;
+    }
+    
+    return absoluteUrl;
   };
 
   // Sinh URL cho chương hiện tại
@@ -1691,12 +1711,12 @@ export default function Home() {
         </div>
       )}
 
-      {/* Modal Cấu hình Domain */}
+      {/* Modal Cấu hình Domain & Cloudflare */}
       {isDomainModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '450px' }}>
+          <div className="modal-content" style={{ maxWidth: '500px' }}>
             <div className="modal-header">
-              <h3 className="modal-title">🌐 Cấu Hình Domain</h3>
+              <h3 className="modal-title">⚙️ Cấu Hình Hệ Thống</h3>
               <button className="btn-icon" onClick={() => setIsDomainModalOpen(false)}>
                 <X size={18} />
               </button>
@@ -1713,17 +1733,46 @@ export default function Home() {
                   onChange={(e) => setTempDomain(e.target.value)}
                   required
                 />
-                <small style={{ display: 'block', marginTop: '8px', color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.4' }}>
+                <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-secondary)', fontSize: '12px', lineHeight: '1.4' }}>
                   Domain này dùng để tự động tạo link đọc cho các truyện chỉ lưu đường dẫn tương đối (ví dụ: <code>truyen/tuyet-the-quan-lam</code>).
                 </small>
               </div>
 
-              <div className="form-actions">
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label className="form-label">Cloudflare Cookie (cf_clearance) <span style={{ color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Tùy chọn)</span></label>
+                <textarea
+                  className="form-control"
+                  style={{ minHeight: '60px', fontFamily: 'monospace', fontSize: '12px' }}
+                  placeholder="Ví dụ: cf_clearance=abcd1234..."
+                  value={tempCookie}
+                  onChange={(e) => setTempCookie(e.target.value)}
+                />
+                <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-secondary)', fontSize: '11px', lineHeight: '1.4' }}>
+                  Lấy từ tab Cookie trên trình duyệt khi truy cập trang truyện (để vượt mã xác minh Cloudflare).
+                </small>
+              </div>
+
+              <div className="form-group" style={{ marginTop: '16px' }}>
+                <label className="form-label">User-Agent Trình Duyệt <span style={{ color: 'var(--text-secondary)', fontWeight: 'normal' }}>(Tùy chọn)</span></label>
+                <input
+                  type="text"
+                  className="form-control"
+                  style={{ fontFamily: 'monospace', fontSize: '12px' }}
+                  placeholder="Mozilla/5.0..."
+                  value={tempUserAgent}
+                  onChange={(e) => setTempUserAgent(e.target.value)}
+                />
+                <small style={{ display: 'block', marginTop: '4px', color: 'var(--text-secondary)', fontSize: '11px', lineHeight: '1.4' }}>
+                  User-Agent phải khớp với trình duyệt bạn lấy Cookie.
+                </small>
+              </div>
+
+              <div className="form-actions" style={{ marginTop: '20px' }}>
                 <button type="button" className="btn btn-outline" onClick={() => setIsDomainModalOpen(false)}>
                   Hủy
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={saveDomainLoading}>
-                  {saveDomainLoading ? 'Đang lưu...' : 'Lưu Thay Đổi'}
+                  {saveDomainLoading ? 'Đang lưu...' : 'Lưu Cài Đặt'}
                 </button>
               </div>
             </form>

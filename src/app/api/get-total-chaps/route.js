@@ -96,10 +96,17 @@ export async function GET(request) {
       return NextResponse.json({ success: false, error: 'URL is required' }, { status: 400 });
     }
 
-    // Lấy domain cấu hình từ database
+    // Lấy domain và cấu hình Cloudflare từ database
     const db = await getDb();
-    const setting = await db.collection('settings').findOne({ key: 'comic_domain' });
-    const domain = setting ? setting.value : (process.env.NEXT_PUBLIC_COMIC_DOMAIN || 'https://goctruyentranhvui30.com');
+    const settings = await db.collection('settings').find({
+      key: { $in: ['comic_domain', 'comic_cookie', 'comic_user_agent'] }
+    }).toArray();
+
+    const domainSetting = settings.find(s => s.key === 'comic_domain');
+    const cookieSetting = settings.find(s => s.key === 'comic_cookie');
+    const uaSetting = settings.find(s => s.key === 'comic_user_agent');
+
+    const domain = domainSetting ? domainSetting.value : (process.env.NEXT_PUBLIC_COMIC_DOMAIN || 'https://goctruyentranhvui30.com');
     const cleanDomain = domain.replace(/\/$/, '');
 
     // Phân giải đường dẫn tương đối
@@ -138,13 +145,18 @@ export async function GET(request) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 giây timeout
 
+    const headers = {
+      'User-Agent': uaSetting?.value || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+    };
+    if (cookieSetting?.value) {
+      headers['Cookie'] = cookieSetting.value;
+    }
+
     const response = await fetch(resolvedUrl, {
       method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-      },
+      headers,
       signal: controller.signal
     });
 
